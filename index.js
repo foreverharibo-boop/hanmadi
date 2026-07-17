@@ -213,14 +213,16 @@ function genreToneHint(genreName) {
 
 // 길이 모드 → 프롬프트 문장
 function lengthSentence(mode) {
-    if (mode === "short")  return "분량은 반드시 3문장 이내로 간결하게 작성하세요.";
-    if (mode === "long")   return "분량에 제한을 두지 말고 충분히 길고 풍부하게 작성하세요.";
+    if (mode === "short")
+        return "**절대 규칙**: 서술+대사를 전부 합쳐서 문장을 총 3개까지만 쓸 수 있습니다. 마침표(.)·물음표(?)·느낌표(!)·대사 끝(\")을 기준으로 문장이 하나씩 끝난 것으로 셉니다. 쓰기 전에 몇 번째 문장인지 속으로 세면서 쓰고, 3번째 문장을 다 쓰면 그 즉시 멈추세요. 4번째 문장은 존재해서는 안 됩니다.";
+    if (mode === "long")
+        return "분량에 제한을 두지 말고 충분히 길고 풍부하게 작성하세요.";
     const customMatch = /^custom:(\d+)$/.exec(mode || "");
     if (customMatch) {
         const n = customMatch[1];
-        return `공백을 포함해서 반드시 정확히 ${n}자 이내로 작성하세요. ${n}자를 절대 넘기지 마세요. 글자수를 스스로 세어보고 초과할 것 같으면 문장을 줄이세요.`;
+        return `**절대 규칙**: 공백을 포함한 전체 글자수가 반드시 ${n}자 이하여야 합니다. ${n}자를 단 한 글자도 넘기면 안 됩니다. 한 글자씩 써나가면서 지금까지 몇 자를 썼는지 계속 세고, ${n}자에 도달하면 문장 중간이라도 즉시 멈추세요.`;
     }
-    return "분량은 10문장 이내로 적당하게 작성하세요.";
+    return "**절대 규칙**: 서술+대사를 전부 합쳐서 문장을 총 10개까지만 쓸 수 있습니다. 10번째 문장을 다 쓰면 그 즉시 멈추세요.";
 }
 
 // 지시사항 한→영 자동 번역 (autoTranslateInst 켜져 있을 때)
@@ -286,14 +288,26 @@ function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3
     if (persona) p += `- 페르소나 성격·말투를 반드시 반영하세요.\n`;
     p += `- 메타 설명 없이 실제 메시지 내용만 출력하세요.\n\n`;
 
-    // ★ 직전 상황을 놓치지 않도록, 최근 3턴을 직접 인용해서 앵커로 박아둠
-    //   (프롬프트 끝부분에 배치 — 모델이 가장 주의 깊게 보는 위치)
+    // ★ 프롬프트 맨 끝은 모델이 가장 주의 깊게 보는 위치라서, "직전 상황 이어쓰기"랑
+    //   "분량 제한"을 따로 두 번 강조하면 서로 경쟁하게 됨 → 하나로 합쳐서 한 번만 마무리
     const lastTurns = getLastTurns(3);
+    const lm = lengthMode || "normal";
+    const needsStrictLength = lm === "short" || /^custom:\d+$/.test(lm);
+
     if (lastTurns.length) {
         p += `## 직전 대화 (최근 ${lastTurns.length}턴 — 아래 흐름에 자연스럽게 이어지는 답변을 쓸 것)\n`;
         p += lastTurns.join("\n") + "\n\n";
-        p += `위가 방금 일어난 일입니다. 절대 무시하거나 다른 상황을 지어내지 말고, 특히 마지막 줄(${char}의 가장 최근 메시지)을 반드시 직접 이어받아서 ${user}의 반응을 쓰세요.\n\n`;
     }
+
+    p += `## 마지막 정리\n`;
+    if (lastTurns.length) {
+        p += `위 [직전 대화]가 방금 일어난 일입니다. 절대 무시하거나 다른 상황을 지어내지 말고, 특히 마지막 줄(${char}의 가장 최근 메시지)을 반드시 직접 이어받아서 ${user}의 반응을 쓰세요.\n`;
+    }
+    if (needsStrictLength) {
+        p += `그리고 그 답변을 쓸 때 ${lengthSentence(lm)}\n`;
+        p += `맥락을 잘 이어가는 것과 분량을 지키는 것 둘 다 반드시 지키세요 — 분량 때문에 맥락을 무시하거나, 맥락 때문에 분량을 넘기지 마세요.\n`;
+    }
+    p += `\n`;
 
     p += outputLang === "en"
         ? `## Output Language\nWrite only in English.`
