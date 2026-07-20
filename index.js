@@ -250,7 +250,7 @@ function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3
     const is3rd = person === "3rd";
     const name3rd = (is3rd && person3rdName?.trim()) ? person3rdName.trim() : null;
     const personLbl = is3rd
-        ? (name3rd ? `3인칭 — 주인공 이름: ${name3rd}` : "3인칭 (그/그녀 등 3인칭 시점)")
+        ? (name3rd ? `3인칭 — 주인공 이름: ${name3rd}` : `3인칭 (이름이 별도 지정되지 않음 — 아래 [중요 규칙] 참고)`)
         : "1인칭 (나/저 등 1인칭 시점)";
 
     // 형식 참고용 — 유저 본인이 과거에 실제로 쓴 메시지 스타일 (내용 아님, 형식만)
@@ -280,7 +280,9 @@ function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3
         p += `- 반드시 3인칭으로 작성하세요. 주인공을 '나'가 아닌 '${name3rd}'(으)로 지칭하세요.\n`;
         p += `- 예시 형식: "${name3rd}가 말했다. \\"대사\\"" / "${name3rd}는 ~했다." 형태로 서술하세요.\n`;
     } else if (is3rd) {
-        p += `- 반드시 3인칭(그/그녀 등)으로 작성하세요.\n`;
+        p += `- 반드시 3인칭으로 작성하세요.\n`;
+        p += `- 먼저 위 [사용자 페르소나] 설명에 성별을 짐작할 수 있는 단서(이름, 외모, 관계 호칭 등)가 있는지 확인하세요. 단서가 있으면 그것에 맞춰 '그' 또는 '그녀' 중 하나로만 일관되게 지칭하세요.\n`;
+        p += `- 단서가 없어서 성별을 확신할 수 없으면, '그'나 '그녀'를 함부로 추측해서 쓰지 마세요. 대신 '${user}'라는 이름을 대명사처럼 반복해서 사용하세요 (예: "${user}가 ~했다. ${user}는 ~라고 말했다.").\n`;
     } else {
         p += `- 반드시 1인칭(나/저 등)으로 작성하세요.\n`;
     }
