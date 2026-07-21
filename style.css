@@ -926,6 +926,35 @@
 }
 
 
+/* ── 유저 메시지 (이미 쓴 부분) 결과 모달 내 표시 ── */
+.dp-usermsg-section {
+    background: var(--dp-surface2);
+    border: 1px solid var(--dp-border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+}
+.dp-usermsg-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--dp-text-muted);
+    margin-bottom: 6px;
+}
+.dp-usermsg-text {
+    font-size: 0.92rem;
+    line-height: 1.55;
+    color: var(--dp-text);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.dp-continuation-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--dp-accent);
+    margin-bottom: 4px;
+    text-align: center;
+}
+
 /* 오버레이 임시 숨김 (장르관리 팝업 위에 뜰 때 등) */
 .dp-overlay.dp-hidden { display: none !important; }
 

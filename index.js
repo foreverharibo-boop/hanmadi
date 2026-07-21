@@ -49,6 +49,7 @@ function getSettings() {
     if (!["past","present","future"].includes(s.tense)) s.tense = "present";
     if (s.lastPresetId === undefined) s.lastPresetId = null;
     if (s.lastInstruction == null) s.lastInstruction = "";
+    if (s.lastUserMessage == null) s.lastUserMessage = "";
     if (s.multiCount !== 3) s.multiCount = 1;
     if (s.profileName == null) s.profileName = "";
     return s;
@@ -237,7 +238,7 @@ async function translateInstruction(text) {
     } catch { return text; }
 }
 
-function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense) {
+function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, userMessage) {
     // ★ 채팅 히스토리는 ST가 generateQuietPrompt 호출 시 자동으로 컨텍스트에 포함시킴
     //   → 여기서 getRecentMsgs로 다시 넣으면 같은 대화가 중복 주입되므로 넣지 않음
     const ctx    = getCtx();
@@ -291,6 +292,14 @@ function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3
     if (persona) p += `- 페르소나 성격·말투를 반드시 반영하세요.\n`;
     p += `- 메타 설명 없이 실제 메시지 내용만 출력하세요.\n\n`;
 
+    // 유저가 이미 작성한 부분이 있으면 → 그 뒤부터 이어쓰라고 지시
+    const hasUserMsg = userMessage?.trim();
+    if (hasUserMsg) {
+        p += `## 유저가 이미 작성한 부분\n`;
+        p += `${userMessage.trim()}\n\n`;
+        p += `[핵심 규칙] 위 내용은 ${user}가 이미 직접 작성한 부분입니다. 이 내용을 절대 반복하거나 다시 쓰지 마세요. 위 내용의 바로 뒷부분부터 자연스럽게 이어지는 내용만 작성하세요.\n\n`;
+    }
+
     // ★ 프롬프트 맨 끝은 모델이 가장 주의 깊게 보는 위치라서, "직전 상황 이어쓰기"랑
     //   "분량 제한"을 따로 두 번 강조하면 서로 경쟁하게 됨 → 하나로 합쳐서 한 번만 마무리
     const lastTurns = getLastTurns(3);
@@ -305,6 +314,9 @@ function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3
     p += `## 마지막 정리\n`;
     if (lastTurns.length) {
         p += `위 [직전 대화]가 방금 일어난 일입니다. 절대 무시하거나 다른 상황을 지어내지 말고, 특히 마지막 줄(${char}의 가장 최근 메시지)을 반드시 직접 이어받아서 ${user}의 반응을 쓰세요.\n`;
+    }
+    if (hasUserMsg) {
+        p += `[이어쓰기] ${user}가 이미 작성한 부분이 있습니다. 그 부분을 절대 반복하지 말고, 그 뒤에 바로 붙을 내용만 출력하세요.\n`;
     }
     if (needsStrictLength) {
         p += `그리고 그 답변을 쓸 때 ${lengthSentence(lm)}\n`;
@@ -382,7 +394,7 @@ async function withProfile(profileName, fn) {
     }
 }
 
-async function generate(instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, onTranslated) {
+async function generate(instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, onTranslated, userMessage) {
     const fn = stGenerate || window.generateQuietPrompt;
     if (typeof fn !== "function") throw new Error("generateQuietPrompt를 찾을 수 없습니다. ST API 연결을 확인해 주세요.");
     const s = getSettings();
@@ -395,7 +407,7 @@ async function generate(instruction, mode, genre, tone, outputLang, person, pers
     // 번역 단계 끝났음을 알려서 로딩 문구를 "AI 대필 중…"으로 바꿀 수 있게 함
     if (typeof onTranslated === "function") onTranslated();
     return await withProfile(s.profileName, () =>
-        fn(buildPrompt(finalInst, mode, genre, tone, outputLang, person, person3rdName, lengthMode || s.lengthMode, tense || s.tense), false, false, null, null, maxTok)
+        fn(buildPrompt(finalInst, mode, genre, tone, outputLang, person, person3rdName, lengthMode || s.lengthMode, tense || s.tense, userMessage), false, false, null, null, maxTok)
     );
 }
 
@@ -533,7 +545,8 @@ function showError(msg) {
 // entry = { result, instruction, mode, genre, tone, outputLang, person, person3rdName, translation? }
 function showResult(entry, onBack) {
     rm("dp-result");
-    const { result, instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense } = entry;
+    const { result, instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, userMessage } = entry;
+    const hasUM = userMessage?.trim();
     const modeKR = { both:"서술+대사", dialogue:"대사만", narration:"서술만" }[mode] || "서술+대사";
     const langKR = outputLang === "en" ? "English" : "한국어";
     const tenseKR = { past:"과거", present:"현재", future:"미래" }[tense] || "현재";
@@ -564,6 +577,11 @@ function showResult(entry, onBack) {
             <span class="dp-tag dp-tag-count">${result.trim().length}자</span>
         </div>
         ${instruction?.trim() ? `<div class="dp-inst-preview">💬 지시: ${esc(instruction.trim())}</div>` : ""}
+        ${hasUM ? `<div class="dp-usermsg-section">
+            <div class="dp-usermsg-label">📝 내가 쓴 부분</div>
+            <div class="dp-usermsg-text">${esc(userMessage.trim())}</div>
+        </div>
+        <div class="dp-continuation-label">✍️ AI 이어쓰기 ↓</div>` : ""}
         <textarea id="dp-res-text" class="dp-result-textarea" spellcheck="false">${esc(result)}</textarea>
         <div id="dp-translation-box" class="dp-translation-box" style="display:none">
             <div class="dp-translation-label">
@@ -594,9 +612,11 @@ function showResult(entry, onBack) {
     });
 
     el.querySelector("#dp-insert").addEventListener("click", () => {
-        insertToInput(el.querySelector("#dp-res-text").value, genre, mode, instruction);
+        const aiText = el.querySelector("#dp-res-text").value;
+        const combined = hasUM ? `${userMessage.trim()}\n${aiText}` : aiText;
+        insertToInput(combined, genre, mode, instruction);
         el.remove();
-        rm("dp-multi-result"); // 3개 목록에서 확장해 들어왔다면 그 뒤에 숨겨진 모달도 정리
+        rm("dp-multi-result");
     });
 
     el.querySelector("#dp-regen").addEventListener("click", async () => {
@@ -604,10 +624,10 @@ function showResult(entry, onBack) {
         const myToken = ++generationToken;
         showLoading();
         try {
-            const r = await generate(instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, () => updateLoadingMessage("AI 대필 중…"));
-            if (myToken !== generationToken) return; // 취소됨
+            const r = await generate(instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, () => updateLoadingMessage("AI 대필 중…"), userMessage);
+            if (myToken !== generationToken) return;
             hideLoading();
-            const newEntry = { result: r, instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense };
+            const newEntry = { result: r, instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, userMessage };
             pushHistory(newEntry);
             showResult(newEntry, onBack);
         } catch (e) {
@@ -631,10 +651,10 @@ function showResult(entry, onBack) {
         const myToken = ++generationToken;
         showLoading();
         try {
-            const r = await generate(combined, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, () => updateLoadingMessage("AI 대필 중…"));
-            if (myToken !== generationToken) return; // 취소됨
+            const r = await generate(combined, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, () => updateLoadingMessage("AI 대필 중…"), userMessage);
+            if (myToken !== generationToken) return;
             hideLoading();
-            const newEntry = { result: r, instruction: combined, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense };
+            const newEntry = { result: r, instruction: combined, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, userMessage };
             pushHistory(newEntry);
             showResult(newEntry, onBack);
         } catch (e) {
@@ -693,7 +713,9 @@ function showResult(entry, onBack) {
 
     // 번역본 삽입
     el.querySelector("#dp-translation-insert").addEventListener("click", () => {
-        insertToInput(translationText.value, genre, mode, instruction);
+        const transText = translationText.value;
+        const combined = hasUM ? `${userMessage.trim()}\n${transText}` : transText;
+        insertToInput(combined, genre, mode, instruction);
         el.remove();
         rm("dp-multi-result");
     });
@@ -772,19 +794,19 @@ function refreshGenreSelect() {
 //  Trigger
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function runGenerate(inst, mode, genre, maxTokens, tone, outputLang, person, person3rdName, lengthMode, tense) {
+async function runGenerate(inst, mode, genre, maxTokens, tone, outputLang, person, person3rdName, lengthMode, tense, userMessage) {
     const s = getSettings();
     const lm = lengthMode || s.lengthMode || "normal";
     const tn = tense || s.tense || "present";
+    const um = userMessage || "";
     const myToken = ++generationToken;
-    // 지시사항 번역 중이면 로딩 메시지 표시
     if (s.autoTranslateInst && inst?.trim()) showLoading("지시사항 번역 중…");
     else showLoading();
     try {
-        const result = await generate(inst, mode, genre, tone, outputLang, person, person3rdName, lm, tn, () => updateLoadingMessage("AI 대필 중…"));
-        if (myToken !== generationToken) return; // 취소됨
+        const result = await generate(inst, mode, genre, tone, outputLang, person, person3rdName, lm, tn, () => updateLoadingMessage("AI 대필 중…"), um);
+        if (myToken !== generationToken) return;
         hideLoading();
-        const entry = { result, instruction: inst, mode, genre, tone, outputLang, person, person3rdName, lengthMode: lm, tense: tn };
+        const entry = { result, instruction: inst, mode, genre, tone, outputLang, person, person3rdName, lengthMode: lm, tense: tn, userMessage: um };
         pushHistory(entry);
         showResult(entry);
     } catch (e) {
@@ -795,16 +817,17 @@ async function runGenerate(inst, mode, genre, maxTokens, tone, outputLang, perso
 }
 
 // 여러 버전(기본 3개) 동시 생성 — 병렬로 요청해서 결과 중 고를 수 있게 보여줌
-async function runGenerateMulti(count, inst, mode, genre, maxTokens, tone, outputLang, person, person3rdName, lengthMode, tense) {
+async function runGenerateMulti(count, inst, mode, genre, maxTokens, tone, outputLang, person, person3rdName, lengthMode, tense, userMessage) {
     const s = getSettings();
     const lm = lengthMode || s.lengthMode || "normal";
     const tn = tense || s.tense || "present";
+    const um = userMessage || "";
     const myToken = ++generationToken;
     if (s.autoTranslateInst && inst?.trim()) showLoading("지시사항 번역 중…");
     else showLoading(`${count}개 버전 생성 중…`);
     try {
         const jobs = Array.from({ length: count }, () =>
-            generate(inst, mode, genre, tone, outputLang, person, person3rdName, lm, tn, () => updateLoadingMessage(`${count}개 버전 생성 중…`))
+            generate(inst, mode, genre, tone, outputLang, person, person3rdName, lm, tn, () => updateLoadingMessage(`${count}개 버전 생성 중…`), um)
         );
         const settled = await Promise.allSettled(jobs);
         if (myToken !== generationToken) return; // 취소됨
@@ -816,7 +839,7 @@ async function runGenerateMulti(count, inst, mode, genre, maxTokens, tone, outpu
             showError("생성 실패. ST API 연결 상태를 확인해 주세요.");
             return;
         }
-        const baseEntry = { instruction: inst, mode, genre, tone, outputLang, person, person3rdName, lengthMode: lm, tense: tn };
+        const baseEntry = { instruction: inst, mode, genre, tone, outputLang, person, person3rdName, lengthMode: lm, tense: tn, userMessage: um };
         showMultiResult(results, baseEntry);
     } catch (e) {
         if (myToken !== generationToken) return;
@@ -828,7 +851,8 @@ async function runGenerateMulti(count, inst, mode, genre, maxTokens, tone, outpu
 // 여러 버전 중 고르는 모달
 function showMultiResult(results, baseEntry) {
     rm("dp-multi-result");
-    const { instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense } = baseEntry;
+    const { instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, userMessage } = baseEntry;
+    const hasUM = userMessage?.trim();
     const modeKR = { both:"서술+대사", dialogue:"대사만", narration:"서술만" }[mode] || "서술+대사";
     const tenseKR = { past:"과거", present:"현재", future:"미래" }[tense] || "현재";
 
@@ -878,7 +902,8 @@ function showMultiResult(results, baseEntry) {
         btn.addEventListener("click", () => {
             const i = parseInt(btn.dataset.i);
             const text = el.querySelector(`.dp-multi-textarea[data-i="${i}"]`).value;
-            insertToInput(text, genre, mode, instruction);
+            const combined = hasUM ? `${userMessage.trim()}\n${text}` : text;
+            insertToInput(combined, genre, mode, instruction);
             el.remove();
         });
     });
@@ -893,7 +918,7 @@ function showMultiResult(results, baseEntry) {
             const originalIcon = btn.innerHTML;
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
             try {
-                const r = await generate(instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense);
+                const r = await generate(instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, null, userMessage);
                 ta.value = r;
                 countEl.textContent = `${r.trim().length}자`;
                 results[i] = r;
@@ -912,7 +937,7 @@ function showMultiResult(results, baseEntry) {
             const i = parseInt(btn.dataset.i);
             const text = el.querySelector(`.dp-multi-textarea[data-i="${i}"]`).value;
             el.classList.add("dp-hidden"); // 지우지 않고 숨김 — 뒤로가기용
-            const entry = { result: text, instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense };
+            const entry = { result: text, instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, userMessage };
             pushHistory(entry);
             showResult(entry, () => {
                 el.classList.remove("dp-hidden"); // 뒤로가기: 3개 목록 화면 복원
@@ -922,7 +947,7 @@ function showMultiResult(results, baseEntry) {
 
     el.querySelector("#dp-mr-regen-all").addEventListener("click", async () => {
         el.remove();
-        await runGenerateMulti(results.length, instruction, mode, genre, null, tone, outputLang, person, person3rdName, lengthMode, tense);
+        await runGenerateMulti(results.length, instruction, mode, genre, null, tone, outputLang, person, person3rdName, lengthMode, tense, userMessage);
     });
 }
 
@@ -1081,9 +1106,15 @@ function showSettingsPopup() {
         <div class="dp-settings-row">
             <div id="dp-sp-import-banner" class="dp-import-banner" style="display:none">
                 <span>💬 입력창에 작성 중인 내용이 있어요</span>
-                <button id="dp-sp-import-go" class="dp-btn dp-btn-sm dp-btn-primary" type="button">가져오기</button>
+                <button id="dp-sp-import-go" class="dp-btn dp-btn-sm dp-btn-primary" type="button">유저 메시지로 가져오기</button>
                 <button id="dp-sp-import-dismiss" class="dp-import-dismiss" type="button" title="닫기">✕</button>
             </div>
+            <label class="dp-settings-label">유저 메시지 <span class="dp-settings-hint">(이미 쓴 부분 — AI가 이 뒤부터 이어씀 · 자동 임시저장됨)</span></label>
+            <textarea id="dp-sp-usermsg" class="dp-textarea" rows="3"
+                placeholder="여기에 내가 이미 쓴 부분을 넣으면, AI가 뒷부분을 이어서 대필해요"></textarea>
+        </div>
+
+        <div class="dp-settings-row">
             <label class="dp-settings-label">지시사항 <span class="dp-settings-hint">(선택 — 비워두면 AI 자동 분석 · 자동 임시저장됨)</span></label>
             <textarea id="dp-sp-inst" class="dp-textarea" rows="3"
                 placeholder="예: 수줍게 고백하는 느낌으로, 장난스럽게, 짧게 한 줄만…"></textarea>
@@ -1127,8 +1158,19 @@ function showSettingsPopup() {
 </div>`;
     mount(el);
 
-    // 지시사항 칸 채우기: 지난번에 써두고 안 지운 지시사항이 있으면 그게 최우선,
-    // 없으면 기본 감정 태그로 채움
+    // 유저 메시지 칸 채우기
+    const umTa = el.querySelector("#dp-sp-usermsg");
+    if (s.lastUserMessage?.trim()) {
+        umTa.value = s.lastUserMessage;
+    }
+
+    // 유저 메시지 자동 임시저장
+    umTa.addEventListener("input", function () {
+        s.lastUserMessage = this.value;
+        saveSettings();
+    });
+
+    // 지시사항 칸 채우기
     const instTa = el.querySelector("#dp-sp-inst");
     if (s.lastInstruction?.trim()) {
         instTa.value = s.lastInstruction;
@@ -1136,25 +1178,24 @@ function showSettingsPopup() {
         instTa.value = s.defaultEmotions.join(", ");
     }
 
-    // 지시사항은 입력하는 대로 임시저장 — 직접 지우기 전까진 다음에 열어도 남아있음
+    // 지시사항 자동 임시저장
     instTa.addEventListener("input", function () {
         s.lastInstruction = this.value;
         saveSettings();
     });
 
-    // 현재 ST 입력창(아직 안 보낸 메시지)을 지시사항 칸으로 가져오기
-    // ST 입력창(아직 안 보낸 메시지)에 내용이 있으면 배너로 알려주고, 없으면 안 보여줌
+    // ST 입력창 내용이 있으면 → 유저 메시지 칸으로 가져오기 배너
     const importBanner = el.querySelector("#dp-sp-import-banner");
     const sendTa = document.getElementById("send_textarea");
     const draft = sendTa?.value?.trim();
     if (draft) importBanner.style.display = "flex";
 
     el.querySelector("#dp-sp-import-go").addEventListener("click", () => {
-        instTa.value = instTa.value.trim() ? `${instTa.value.trim()}\n${draft}` : draft;
-        s.lastInstruction = instTa.value;
+        umTa.value = draft;
+        s.lastUserMessage = draft;
         saveSettings();
         importBanner.style.display = "none";
-        instTa.focus();
+        umTa.focus();
     });
 
     el.querySelector("#dp-sp-import-dismiss").addEventListener("click", () => {
@@ -1479,6 +1520,7 @@ function showSettingsPopup() {
     el.querySelector("#dp-sp-go").addEventListener("click", async () => {
         const selGenre = el.querySelector("#dp-sp-genre").value;
         const inst = el.querySelector("#dp-sp-inst").value.trim();
+        const umVal = el.querySelector("#dp-sp-usermsg").value.trim();
         const tokens = Math.max(0, parseInt(el.querySelector("#dp-sp-tokens").value) || 0);
         const tone = { formality: parseInt(formalitySlider.value), playfulness: parseInt(playfulnessSlider.value) };
         const name3rd = el.querySelector("#dp-sp-name").value.trim();
@@ -1500,11 +1542,15 @@ function showSettingsPopup() {
         s.lastPresetId = el.querySelector("#dp-sp-preset").value || null;
         saveSettings();
 
+        // 유저 메시지도 저장
+        s.lastUserMessage = umVal;
+        saveSettings();
+
         el.remove();
         if (currentMultiCount === 3) {
-            await runGenerateMulti(3, inst, currentMode, selGenre, tokens, tone, currentLang, currentPerson, name3rd, currentLength, currentTense);
+            await runGenerateMulti(3, inst, currentMode, selGenre, tokens, tone, currentLang, currentPerson, name3rd, currentLength, currentTense, umVal);
         } else {
-            await runGenerate(inst, currentMode, selGenre, tokens, tone, currentLang, currentPerson, name3rd, currentLength, currentTense);
+            await runGenerate(inst, currentMode, selGenre, tokens, tone, currentLang, currentPerson, name3rd, currentLength, currentTense, umVal);
         }
     });
 }
