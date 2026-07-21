@@ -1704,7 +1704,7 @@ function updateWandMode() {
             settingsBtn.id = "dp-wand-settings";
             settingsBtn.className = "dp-wand dp-wand-settings";
             settingsBtn.title = "한마디 — 대필 설정";
-            settingsBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i>';
+            settingsBtn.innerHTML = '<i class="fa-solid fa-gear"></i>';
             settingsBtn.addEventListener("click", (e) => {
                 e.stopPropagation();
                 showSettingsPopup();
