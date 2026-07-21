@@ -1156,17 +1156,8 @@ function showSettingsPopup() {
 </div>`;
     mount(el);
 
-    // 유저 메시지 칸 채우기
+    // 유저 메시지 칸 — 열 때마다 초기화 (가져오기 버튼으로 불러오면 됨)
     const umTa = el.querySelector("#dp-sp-usermsg");
-    if (s.lastUserMessage?.trim()) {
-        umTa.value = s.lastUserMessage;
-    }
-
-    // 유저 메시지 자동 임시저장
-    umTa.addEventListener("input", function () {
-        s.lastUserMessage = this.value;
-        saveSettings();
-    });
 
     // 지시사항 칸 채우기
     const instTa = el.querySelector("#dp-sp-inst");
@@ -1188,8 +1179,6 @@ function showSettingsPopup() {
         const draft = sendTa?.value?.trim();
         if (!draft) return;
         umTa.value = draft;
-        s.lastUserMessage = draft;
-        saveSettings();
         umTa.focus();
     });
 
@@ -1531,10 +1520,6 @@ function showSettingsPopup() {
         s.tense = currentTense;
         s.multiCount = currentMultiCount;
         s.lastPresetId = el.querySelector("#dp-sp-preset").value || null;
-        saveSettings();
-
-        // 유저 메시지도 저장
-        s.lastUserMessage = umVal;
         saveSettings();
 
         el.remove();
