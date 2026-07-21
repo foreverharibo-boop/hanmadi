@@ -1557,7 +1557,6 @@ function triggerGenerate() {
 
 async function quickGenerate() {
     const s = getSettings();
-    // 인풋 내용을 유저 메시지로 자동 수집
     const sendTa = document.getElementById("send_textarea");
     const um = sendTa?.value?.trim() || "";
     const inst = s.lastInstruction || "";
@@ -1570,7 +1569,20 @@ async function quickGenerate() {
     const lang = s.outputLang || "";
     const mode = s.writingMode || "continue";
 
-    await runGenerate(inst, mode, genre, null, tone, lang, person, name3rd, lm, tn, um);
+    const myToken = ++generationToken;
+    showLoading();
+    try {
+        const result = await generate(inst, mode, genre, tone, lang, person, name3rd, lm, tn, () => updateLoadingMessage("AI 대필 중…"), um);
+        if (myToken !== generationToken) return;
+        hideLoading();
+        // 결과 모달 없이 바로 인풋에 삽입
+        const combined = um ? `${um}\n${result}` : result;
+        insertToInput(combined, genre, mode, inst, !!um);
+    } catch (e) {
+        if (myToken !== generationToken) return;
+        hideLoading();
+        showError(e.message || "생성 실패. ST API 연결 상태를 확인해 주세요.");
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1704,7 +1716,7 @@ function updateWandMode() {
             settingsBtn.id = "dp-wand-settings";
             settingsBtn.className = "dp-wand dp-wand-settings";
             settingsBtn.title = "한마디 — 대필 설정";
-            settingsBtn.innerHTML = '<i class="fa-solid fa-gear"></i>';
+            settingsBtn.innerHTML = '<i class="fa-solid fa-palette"></i>';
             settingsBtn.addEventListener("click", (e) => {
                 e.stopPropagation();
                 showSettingsPopup();
