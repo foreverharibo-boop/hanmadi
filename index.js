@@ -1684,7 +1684,7 @@ function injectWand() {
     if (wandDone || document.getElementById("dp-wand")) { wandDone = true; updateWandMode(); return; }
     const btn = document.createElement("div");
     btn.id = "dp-wand"; btn.className = "dp-wand"; btn.title = "한마디 — 인풋 대필";
-    btn.innerHTML = '<i class="fa-solid fa-pen-nib"></i>';
+    btn.innerHTML = '<i class="fa-solid fa-pen-nib" style="background:linear-gradient(135deg,#FF6B6B,#FFD93D,#6BCB77,#4D96FF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>';
     btn.addEventListener("click", triggerGenerate);
     for (const sel of ["#leftSendForm","#extensionsSendButton","#send_form","#rightSendForm"]) {
         const el = document.querySelector(sel);
