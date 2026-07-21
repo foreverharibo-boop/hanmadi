@@ -926,6 +926,57 @@
 }
 
 
+/* ── 퀵 모드 설정 버튼 (🪄) ── */
+.dp-wand-settings {
+    font-size: 0.85em;
+    opacity: 0.7;
+    transition: opacity 0.15s;
+}
+.dp-wand-settings:hover {
+    opacity: 1;
+}
+
+/* ── 퀵 모드 토글 (패널) ── */
+.dp-toggle {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 22px;
+    cursor: pointer;
+}
+.dp-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.dp-toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: var(--dp-surface2);
+    border: 1px solid var(--dp-border);
+    border-radius: 11px;
+    transition: background 0.2s;
+}
+.dp-toggle-slider::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 2px;
+    width: 16px;
+    height: 16px;
+    background: var(--dp-text-muted);
+    border-radius: 50%;
+    transition: transform 0.2s, background 0.2s;
+}
+.dp-toggle input:checked + .dp-toggle-slider {
+    background: var(--dp-accent);
+    border-color: var(--dp-accent);
+}
+.dp-toggle input:checked + .dp-toggle-slider::before {
+    transform: translateX(18px);
+    background: #fff;
+}
+
 /* ── 입력창에서 가져오기 버튼 (라벨 옆 인라인) ── */
 .dp-import-inline-btn {
     display: inline-block;

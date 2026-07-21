@@ -50,6 +50,7 @@ function getSettings() {
     if (s.lastPresetId === undefined) s.lastPresetId = null;
     if (s.lastInstruction == null) s.lastInstruction = "";
     if (s.lastUserMessage == null) s.lastUserMessage = "";
+    if (s.quickMode !== true) s.quickMode = false;
     if (s.multiCount !== 3) s.multiCount = 1;
     if (s.profileName == null) s.profileName = "";
     return s;
@@ -1546,7 +1547,30 @@ function showSettingsPopup() {
 }
 
 function triggerGenerate() {
-    showSettingsPopup();
+    const s = getSettings();
+    if (s.quickMode) {
+        quickGenerate();
+    } else {
+        showSettingsPopup();
+    }
+}
+
+async function quickGenerate() {
+    const s = getSettings();
+    // 인풋 내용을 유저 메시지로 자동 수집
+    const sendTa = document.getElementById("send_textarea");
+    const um = sendTa?.value?.trim() || "";
+    const inst = s.lastInstruction || "";
+    const genre = s.selectedGenre || s.genres?.[0] || "소설";
+    const tone = { formality: s.toneFormality ?? 50, playfulness: s.tonePlayfulness ?? 50 };
+    const person = s.person || "1st";
+    const name3rd = s.person3rdName || "";
+    const lm = s.lengthMode || "normal";
+    const tn = s.tense || "present";
+    const lang = s.outputLang || "";
+    const mode = s.writingMode || "continue";
+
+    await runGenerate(inst, mode, genre, null, tone, lang, person, name3rd, lm, tn, um);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1570,6 +1594,17 @@ function buildPanelHtml() {
                 장르·톤·인칭·시제 같은 설정은 대필 설정 팝업(완드 버튼)에서 고르면 자동 저장돼.
                 여기서는 대필 생성에 쓸 연결 프로필만 지정할 수 있어.
             </p>
+
+            <div class="dp-row">
+                <label class="dp-label">퀵 모드</label>
+                <div class="dp-genre-row">
+                    <label class="dp-toggle" title="켜면 버튼 한 번으로 바로 대필 생성">
+                        <input type="checkbox" id="dp-panel-quickmode">
+                        <span class="dp-toggle-slider"></span>
+                    </label>
+                    <span class="dp-hint" style="margin-left:8px;">켜면 완드 버튼 → 바로 생성, 설정은 🪄 버튼으로</span>
+                </div>
+            </div>
 
             <div class="dp-row">
                 <label class="dp-label">연결 프로필</label>
@@ -1626,6 +1661,19 @@ function injectPanel() {
     if (!target) return;
     target.insertAdjacentHTML("beforeend", buildPanelHtml());
     panelDone = true;
+
+    // 퀵 모드 토글
+    const qmToggle = document.getElementById("dp-panel-quickmode");
+    if (qmToggle) {
+        const s = getSettings();
+        qmToggle.checked = s.quickMode;
+        qmToggle.addEventListener("change", () => {
+            s.quickMode = qmToggle.checked;
+            saveSettings();
+            updateWandMode();
+        });
+    }
+
     populateProfileSelect();
     // ST 슬래시커맨드 등록이 약간 늦게 끝나는 경우를 대비한 재시도
     setTimeout(() => populateProfileSelect(), 2000);
@@ -1633,14 +1681,39 @@ function injectPanel() {
 }
 
 function injectWand() {
-    if (wandDone || document.getElementById("dp-wand")) { wandDone = true; return; }
+    if (wandDone || document.getElementById("dp-wand")) { wandDone = true; updateWandMode(); return; }
     const btn = document.createElement("div");
     btn.id = "dp-wand"; btn.className = "dp-wand"; btn.title = "한마디 — 인풋 대필";
     btn.innerHTML = '<i class="fa-solid fa-pen-nib"></i>';
     btn.addEventListener("click", triggerGenerate);
     for (const sel of ["#leftSendForm","#extensionsSendButton","#send_form","#rightSendForm"]) {
         const el = document.querySelector(sel);
-        if (el) { el.appendChild(btn); wandDone = true; console.log(`[한마디] ✅ 완드 버튼 → ${sel}`); return; }
+        if (el) { el.appendChild(btn); wandDone = true; console.log(`[한마디] ✅ 완드 버튼 → ${sel}`); updateWandMode(); return; }
+    }
+}
+
+function updateWandMode() {
+    const s = getSettings();
+    const wand = document.getElementById("dp-wand");
+    if (!wand) return;
+    let settingsBtn = document.getElementById("dp-wand-settings");
+    if (s.quickMode) {
+        wand.title = "한마디 — 바로 대필";
+        if (!settingsBtn) {
+            settingsBtn = document.createElement("div");
+            settingsBtn.id = "dp-wand-settings";
+            settingsBtn.className = "dp-wand dp-wand-settings";
+            settingsBtn.title = "한마디 — 대필 설정";
+            settingsBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i>';
+            settingsBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                showSettingsPopup();
+            });
+            wand.parentElement.insertBefore(settingsBtn, wand);
+        }
+    } else {
+        wand.title = "한마디 — 인풋 대필";
+        if (settingsBtn) settingsBtn.remove();
     }
 }
 
