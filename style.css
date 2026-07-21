@@ -616,6 +616,31 @@
 
 .dp-settings-row { display: flex; flex-direction: column; gap: 6px; }
 
+.dp-import-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--dp-surface2);
+    border: 1px solid var(--dp-border);
+    border-radius: 9px;
+    padding: 7px 8px 7px 11px;
+    font-size: 0.78rem;
+    color: var(--dp-text);
+}
+.dp-import-banner span { flex: 1; min-width: 0; }
+.dp-import-dismiss {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    color: var(--dp-sub);
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: 5px;
+    transition: color 0.15s, background 0.15s;
+}
+.dp-import-dismiss:hover { color: var(--dp-text); background: var(--dp-surface); }
+
 .dp-settings-label {
     font-size: 0.75rem;
     font-weight: 700;

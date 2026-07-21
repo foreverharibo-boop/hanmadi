@@ -22,7 +22,7 @@ function getSettings() {
         toneFormality: DEFAULT_TONE.formality, tonePlayfulness: DEFAULT_TONE.playfulness,
         outputLang: "ko", presets: [], translateMaxTokens: 1000, person: "1st", person3rdName: "",
         lengthMode: "normal", autoTranslateInst: false, defaultEmotions: [], tense: "present", lastPresetId: null,
-        profileName: "", multiCount: 1,
+        profileName: "", multiCount: 1, lastInstruction: "",
     };
     // ★ 확장 이름이 "해줘" → "한마디"로 바뀌면서, 예전 설정(프리셋 등)을 한 번만 그대로 옮겨옴
     if (!stSettings[EXT] && stSettings[OLD_EXT]) {
@@ -48,6 +48,7 @@ function getSettings() {
     if (!Array.isArray(s.defaultEmotions)) s.defaultEmotions = [];
     if (!["past","present","future"].includes(s.tense)) s.tense = "present";
     if (s.lastPresetId === undefined) s.lastPresetId = null;
+    if (s.lastInstruction == null) s.lastInstruction = "";
     if (s.multiCount !== 3) s.multiCount = 1;
     if (s.profileName == null) s.profileName = "";
     return s;
@@ -1078,7 +1079,12 @@ function showSettingsPopup() {
         </div>
 
         <div class="dp-settings-row">
-            <label class="dp-settings-label">지시사항 <span class="dp-settings-hint">(선택 — 비워두면 AI 자동 분석)</span></label>
+            <div id="dp-sp-import-banner" class="dp-import-banner" style="display:none">
+                <span>💬 입력창에 작성 중인 내용이 있어요</span>
+                <button id="dp-sp-import-go" class="dp-btn dp-btn-sm dp-btn-primary" type="button">가져오기</button>
+                <button id="dp-sp-import-dismiss" class="dp-import-dismiss" type="button" title="닫기">✕</button>
+            </div>
+            <label class="dp-settings-label">지시사항 <span class="dp-settings-hint">(선택 — 비워두면 AI 자동 분석 · 자동 임시저장됨)</span></label>
             <textarea id="dp-sp-inst" class="dp-textarea" rows="3"
                 placeholder="예: 수줍게 고백하는 느낌으로, 장난스럽게, 짧게 한 줄만…"></textarea>
         </div>
@@ -1121,10 +1127,39 @@ function showSettingsPopup() {
 </div>`;
     mount(el);
 
-    // 기본 감정 태그가 설정되어 있으면 지시사항 칸에 미리 채워둠
-    if (s.defaultEmotions.length) {
-        el.querySelector("#dp-sp-inst").value = s.defaultEmotions.join(", ");
+    // 지시사항 칸 채우기: 지난번에 써두고 안 지운 지시사항이 있으면 그게 최우선,
+    // 없으면 기본 감정 태그로 채움
+    const instTa = el.querySelector("#dp-sp-inst");
+    if (s.lastInstruction?.trim()) {
+        instTa.value = s.lastInstruction;
+    } else if (s.defaultEmotions.length) {
+        instTa.value = s.defaultEmotions.join(", ");
     }
+
+    // 지시사항은 입력하는 대로 임시저장 — 직접 지우기 전까진 다음에 열어도 남아있음
+    instTa.addEventListener("input", function () {
+        s.lastInstruction = this.value;
+        saveSettings();
+    });
+
+    // 현재 ST 입력창(아직 안 보낸 메시지)을 지시사항 칸으로 가져오기
+    // ST 입력창(아직 안 보낸 메시지)에 내용이 있으면 배너로 알려주고, 없으면 안 보여줌
+    const importBanner = el.querySelector("#dp-sp-import-banner");
+    const sendTa = document.getElementById("send_textarea");
+    const draft = sendTa?.value?.trim();
+    if (draft) importBanner.style.display = "flex";
+
+    el.querySelector("#dp-sp-import-go").addEventListener("click", () => {
+        instTa.value = instTa.value.trim() ? `${instTa.value.trim()}\n${draft}` : draft;
+        s.lastInstruction = instTa.value;
+        saveSettings();
+        importBanner.style.display = "none";
+        instTa.focus();
+    });
+
+    el.querySelector("#dp-sp-import-dismiss").addEventListener("click", () => {
+        importBanner.style.display = "none";
+    });
 
     // ── 상태 추적 ──
     let currentMode = s.writingMode;
@@ -1321,6 +1356,7 @@ function showSettingsPopup() {
         currentMode = preset.writingMode;
         el.querySelectorAll("#dp-sp-mode-group .dp-mode-btn").forEach(b => b.classList.toggle("active", b.dataset.mode === preset.writingMode));
         el.querySelector("#dp-sp-inst").value = preset.instruction || "";
+        s.lastInstruction = preset.instruction || "";
         el.querySelector("#dp-sp-tokens").value = preset.maxTokens ?? 500;
         formalitySlider.value = preset.toneFormality ?? 50;
         playfulnessSlider.value = preset.tonePlayfulness ?? 50;
