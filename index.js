@@ -1704,7 +1704,7 @@ function updateWandMode() {
             settingsBtn.id = "dp-wand-settings";
             settingsBtn.className = "dp-wand dp-wand-settings";
             settingsBtn.title = "한마디 — 대필 설정";
-            settingsBtn.innerHTML = '<i class="fa-solid fa-palette"></i>';
+            settingsBtn.innerHTML = '<i class="fa-solid fa-palette" style="background:linear-gradient(135deg,#FF6B6B,#FFD93D,#6BCB77,#4D96FF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>';
             settingsBtn.addEventListener("click", (e) => {
                 e.stopPropagation();
                 showSettingsPopup();
