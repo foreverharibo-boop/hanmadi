@@ -926,6 +926,12 @@
 }
 
 
+/* ── 입력창에서 가져오기 버튼 ── */
+.dp-import-btn {
+    margin-top: 6px;
+    align-self: flex-start;
+}
+
 /* ── 유저 메시지 (이미 쓴 부분) 결과 모달 내 표시 ── */
 .dp-usermsg-section {
     background: var(--dp-surface2);

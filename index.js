@@ -449,10 +449,10 @@ function esc(s) {
 }
 function rm(id) { document.getElementById(id)?.remove(); }
 
-function insertToInput(text, genre, mode, instruction) {
+function insertToInput(text, genre, mode, instruction, replace = false) {
     const ta = document.getElementById("send_textarea");
     if (ta) {
-        ta.value = ta.value ? `${ta.value}\n${text}` : text;
+        ta.value = replace ? text : (ta.value ? `${ta.value}\n${text}` : text);
         ta.dispatchEvent(new Event("input", { bubbles: true }));
         ta.focus();
     }
@@ -614,7 +614,7 @@ function showResult(entry, onBack) {
     el.querySelector("#dp-insert").addEventListener("click", () => {
         const aiText = el.querySelector("#dp-res-text").value;
         const combined = hasUM ? `${userMessage.trim()}\n${aiText}` : aiText;
-        insertToInput(combined, genre, mode, instruction);
+        insertToInput(combined, genre, mode, instruction, hasUM);
         el.remove();
         rm("dp-multi-result");
     });
@@ -715,7 +715,7 @@ function showResult(entry, onBack) {
     el.querySelector("#dp-translation-insert").addEventListener("click", () => {
         const transText = translationText.value;
         const combined = hasUM ? `${userMessage.trim()}\n${transText}` : transText;
-        insertToInput(combined, genre, mode, instruction);
+        insertToInput(combined, genre, mode, instruction, hasUM);
         el.remove();
         rm("dp-multi-result");
     });
@@ -903,7 +903,7 @@ function showMultiResult(results, baseEntry) {
             const i = parseInt(btn.dataset.i);
             const text = el.querySelector(`.dp-multi-textarea[data-i="${i}"]`).value;
             const combined = hasUM ? `${userMessage.trim()}\n${text}` : text;
-            insertToInput(combined, genre, mode, instruction);
+            insertToInput(combined, genre, mode, instruction, hasUM);
             el.remove();
         });
     });
@@ -1104,14 +1104,12 @@ function showSettingsPopup() {
         </div>
 
         <div class="dp-settings-row">
-            <div id="dp-sp-import-banner" class="dp-import-banner" style="display:none">
-                <span>💬 입력창에 작성 중인 내용이 있어요</span>
-                <button id="dp-sp-import-go" class="dp-btn dp-btn-sm dp-btn-primary" type="button">유저 메시지로 가져오기</button>
-                <button id="dp-sp-import-dismiss" class="dp-import-dismiss" type="button" title="닫기">✕</button>
-            </div>
             <label class="dp-settings-label">유저 메시지 <span class="dp-settings-hint">(이미 쓴 부분 — AI가 이 뒤부터 이어씀 · 자동 임시저장됨)</span></label>
             <textarea id="dp-sp-usermsg" class="dp-textarea" rows="3"
                 placeholder="여기에 내가 이미 쓴 부분을 넣으면, AI가 뒷부분을 이어서 대필해요"></textarea>
+            <button id="dp-sp-import-go" class="dp-btn dp-btn-sm dp-import-btn" type="button">
+                <i class="fa-solid fa-arrow-up-from-bracket"></i> 입력창에서 가져오기
+            </button>
         </div>
 
         <div class="dp-settings-row">
@@ -1184,22 +1182,15 @@ function showSettingsPopup() {
         saveSettings();
     });
 
-    // ST 입력창 내용이 있으면 → 유저 메시지 칸으로 가져오기 배너
-    const importBanner = el.querySelector("#dp-sp-import-banner");
-    const sendTa = document.getElementById("send_textarea");
-    const draft = sendTa?.value?.trim();
-    if (draft) importBanner.style.display = "flex";
-
+    // 입력창에서 가져오기 버튼
     el.querySelector("#dp-sp-import-go").addEventListener("click", () => {
+        const sendTa = document.getElementById("send_textarea");
+        const draft = sendTa?.value?.trim();
+        if (!draft) return;
         umTa.value = draft;
         s.lastUserMessage = draft;
         saveSettings();
-        importBanner.style.display = "none";
         umTa.focus();
-    });
-
-    el.querySelector("#dp-sp-import-dismiss").addEventListener("click", () => {
-        importBanner.style.display = "none";
     });
 
     // ── 상태 추적 ──
