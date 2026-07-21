@@ -1114,7 +1114,9 @@ function showSettingsPopup() {
         </div>
 
         <div class="dp-settings-row">
-            <label class="dp-settings-label">지시사항 <span class="dp-settings-hint">(선택 — 비워두면 AI 자동 분석 · 자동 임시저장됨)</span></label>
+            <label class="dp-settings-label">지시사항 <span class="dp-settings-hint">(선택 — 비워두면 AI 자동 분석 · 자동 임시저장됨)</span>
+                <button id="dp-sp-import-inst" class="dp-import-inline-btn" type="button">가져오기</button>
+            </label>
             <textarea id="dp-sp-inst" class="dp-textarea" rows="3"
                 placeholder="예: 수줍게 고백하는 느낌으로, 장난스럽게, 짧게 한 줄만…"></textarea>
         </div>
@@ -1181,6 +1183,17 @@ function showSettingsPopup() {
         if (!draft) return;
         umTa.value = draft;
         umTa.focus();
+    });
+
+    // 지시사항 가져오기
+    el.querySelector("#dp-sp-import-inst").addEventListener("click", () => {
+        const sendTa = document.getElementById("send_textarea");
+        const draft = sendTa?.value?.trim();
+        if (!draft) return;
+        instTa.value = draft;
+        s.lastInstruction = draft;
+        saveSettings();
+        instTa.focus();
     });
 
     // ── 상태 추적 ──
