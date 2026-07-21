@@ -926,10 +926,25 @@
 }
 
 
-/* ── 입력창에서 가져오기 버튼 ── */
-.dp-import-btn {
-    margin-top: 6px;
-    align-self: flex-start;
+/* ── 입력창에서 가져오기 버튼 (라벨 옆 인라인) ── */
+.dp-import-inline-btn {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 8px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    line-height: 1.6;
+    border: 1px solid var(--SmartThemeBorderColor, var(--dp-border));
+    border-radius: 4px;
+    background: var(--SmartThemeBlurTintColor, var(--dp-surface2));
+    color: var(--SmartThemeBodyColor, var(--dp-text));
+    cursor: pointer;
+    vertical-align: middle;
+    transition: background 0.15s, border-color 0.15s;
+}
+.dp-import-inline-btn:hover {
+    background: var(--SmartThemeHoverColor, var(--dp-surface2));
+    border-color: var(--SmartThemeBorderColor, var(--dp-accent));
 }
 
 /* ── 유저 메시지 (이미 쓴 부분) 결과 모달 내 표시 ── */

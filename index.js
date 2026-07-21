@@ -1104,12 +1104,11 @@ function showSettingsPopup() {
         </div>
 
         <div class="dp-settings-row">
-            <label class="dp-settings-label">유저 메시지 <span class="dp-settings-hint">(이미 쓴 부분 — AI가 이 뒤부터 이어씀 · 자동 임시저장됨)</span></label>
+            <label class="dp-settings-label">유저 메시지 <span class="dp-settings-hint">(이미 쓴 부분 — AI가 이 뒤부터 이어씀)</span>
+                <button id="dp-sp-import-go" class="dp-import-inline-btn" type="button">가져오기</button>
+            </label>
             <textarea id="dp-sp-usermsg" class="dp-textarea" rows="3"
                 placeholder="여기에 내가 이미 쓴 부분을 넣으면, AI가 뒷부분을 이어서 대필해요"></textarea>
-            <button id="dp-sp-import-go" class="dp-btn dp-btn-sm dp-import-btn" type="button">
-                <i class="fa-solid fa-arrow-up-from-bracket"></i> 입력창에서 가져오기
-            </button>
         </div>
 
         <div class="dp-settings-row">
