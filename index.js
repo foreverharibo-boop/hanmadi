@@ -1115,9 +1115,7 @@ function showSettingsPopup() {
         </div>
 
         <div class="dp-settings-row">
-            <label class="dp-settings-label">지시사항 <span class="dp-settings-hint">(선택 — 비워두면 AI 자동 분석 · 자동 임시저장됨)</span>
-                <button id="dp-sp-import-inst" class="dp-import-inline-btn" type="button">가져오기</button>
-            </label>
+            <label class="dp-settings-label">지시사항 <span class="dp-settings-hint">(선택 — 비워두면 AI 자동 분석 · 자동 임시저장됨)</span></label>
             <textarea id="dp-sp-inst" class="dp-textarea" rows="3"
                 placeholder="예: 수줍게 고백하는 느낌으로, 장난스럽게, 짧게 한 줄만…"></textarea>
         </div>
@@ -1184,17 +1182,6 @@ function showSettingsPopup() {
         if (!draft) return;
         umTa.value = draft;
         umTa.focus();
-    });
-
-    // 지시사항 가져오기
-    el.querySelector("#dp-sp-import-inst").addEventListener("click", () => {
-        const sendTa = document.getElementById("send_textarea");
-        const draft = sendTa?.value?.trim();
-        if (!draft) return;
-        instTa.value = draft;
-        s.lastInstruction = draft;
-        saveSettings();
-        instTa.focus();
     });
 
     // ── 상태 추적 ──
@@ -1602,11 +1589,6 @@ function buildPanelHtml() {
     <div class="inline-drawer-content">
         <div id="dp-panel" class="dp-panel ${tc()}">
 
-            <p class="dp-panel-desc">
-                장르·톤·인칭·시제 같은 설정은 대필 설정 팝업(완드 버튼)에서 고르면 자동 저장돼.
-                여기서는 대필 생성에 쓸 연결 프로필만 지정할 수 있어.
-            </p>
-
             <div class="dp-row">
                 <label class="dp-label">퀵 모드</label>
                 <div class="dp-genre-row">
@@ -1614,7 +1596,7 @@ function buildPanelHtml() {
                         <input type="checkbox" id="dp-panel-quickmode">
                         <span class="dp-toggle-slider"></span>
                     </label>
-                    <span class="dp-hint" style="margin-left:8px;">켜면 완드 버튼 → 바로 생성, 설정은 🪄 버튼으로</span>
+                    <span class="dp-hint" style="margin-left:8px;"><i class="fa-solid fa-pen-nib"></i> 바로 생성, 설정은 <i class="fa-solid fa-palette"></i> 버튼으로</span>
                 </div>
             </div>
 
