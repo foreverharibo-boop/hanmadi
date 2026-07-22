@@ -13,7 +13,7 @@ const ICON_COLORS = {
     blue:         "color:#4D96FF;",
     red:          "color:#e74c3c;",
 };
-const EMOJI_MAP = { "e-pencil":"✏️","e-memo":"📝","e-palette":"🎨","e-gear":"⚙️","e-sparkles":"✨" };
+const EMOJI_MAP = { "e-pencil":"✏️","e-memo":"📝","e-pen":"🖊️","e-brush":"🖌️","e-quill":"🪶","e-palette":"🎨","e-gear":"⚙️","e-sparkles":"✨","e-wrench":"🔧","e-magic":"🪄","e-crystal":"🔮" };
 function isEmojiIcon(k) { return k.startsWith("e-"); }
 function renderIconHtml(iconKey, colorKey) {
     if (isEmojiIcon(iconKey)) return EMOJI_MAP[iconKey] || "?";
@@ -1632,13 +1632,13 @@ function buildPanelHtml() {
                 <div class="dp-icon-picker" id="dp-pen-icons">
                     <div class="dp-icon-opt" data-icon="fa-pen-nib"><i class="fa-solid fa-pen-nib"></i></div>
                     <div class="dp-icon-opt" data-icon="fa-pen-fancy"><i class="fa-solid fa-pen-fancy"></i></div>
-                    <div class="dp-icon-opt" data-icon="fa-paintbrush"><i class="fa-solid fa-paintbrush"></i></div>
                     <div class="dp-icon-opt" data-icon="fa-pen"><i class="fa-solid fa-pen"></i></div>
                     <div class="dp-icon-opt" data-icon="fa-pencil"><i class="fa-solid fa-pencil"></i></div>
-                    <div class="dp-icon-opt" data-icon="fa-pen-clip"><i class="fa-solid fa-pen-clip"></i></div>
-                    <div class="dp-icon-opt" data-icon="fa-signature"><i class="fa-solid fa-signature"></i></div>
+                    <div class="dp-icon-opt" data-icon="fa-paintbrush"><i class="fa-solid fa-paintbrush"></i></div>
                     <div class="dp-icon-opt" data-icon="e-pencil">✏️</div>
                     <div class="dp-icon-opt" data-icon="e-memo">📝</div>
+                    <div class="dp-icon-opt" data-icon="e-pen">🖊️</div>
+                    <div class="dp-icon-opt" data-icon="e-brush">🖌️</div>
                 </div>
                 <div class="dp-color-picker" id="dp-pen-colors">
                     <div class="dp-color-dot" data-color="inherit" style="background:var(--SmartThemeBodyColor,#bbb)"></div>
@@ -1657,12 +1657,13 @@ function buildPanelHtml() {
                     <div class="dp-icon-opt" data-icon="fa-palette"><i class="fa-solid fa-palette"></i></div>
                     <div class="dp-icon-opt" data-icon="fa-gear"><i class="fa-solid fa-gear"></i></div>
                     <div class="dp-icon-opt" data-icon="fa-sliders"><i class="fa-solid fa-sliders"></i></div>
-                    <div class="dp-icon-opt" data-icon="fa-wrench"><i class="fa-solid fa-wrench"></i></div>
                     <div class="dp-icon-opt" data-icon="fa-wand-magic-sparkles"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
-                    <div class="dp-icon-opt" data-icon="fa-swatchbook"><i class="fa-solid fa-swatchbook"></i></div>
                     <div class="dp-icon-opt" data-icon="e-palette">🎨</div>
                     <div class="dp-icon-opt" data-icon="e-gear">⚙️</div>
                     <div class="dp-icon-opt" data-icon="e-sparkles">✨</div>
+                    <div class="dp-icon-opt" data-icon="e-wrench">🔧</div>
+                    <div class="dp-icon-opt" data-icon="e-magic">🪄</div>
+                    <div class="dp-icon-opt" data-icon="e-crystal">🔮</div>
                 </div>
                 <div class="dp-color-picker" id="dp-set-colors">
                     <div class="dp-color-dot" data-color="inherit" style="background:var(--SmartThemeBodyColor,#bbb)"></div>
