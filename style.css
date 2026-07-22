@@ -223,23 +223,23 @@
    Wand Button
    ═══════════════════════════════════════════════════════════════════ */
 
-#dp-wand {
+#dp-wand, .dp-wand-settings {
     display: inline-flex !important;
     align-items: center;
     justify-content: center;
-    width: 30px;
-    height: 30px;
-    min-width: 30px;
-    border-radius: 7px;
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    border-radius: 5px;
     cursor: pointer;
-    font-size: 0.85rem;
+    font-size: 0.72rem;
     color: inherit;
     transition: background 0.15s;
     flex-shrink: 0;
-    margin: auto 2px;
+    margin: auto 0px;
     user-select: none;
 }
-#dp-wand:hover { background: rgba(128,128,128,0.15); }
+#dp-wand:hover, .dp-wand-settings:hover { background: rgba(128,128,128,0.15); }
 
 /* ═══════════════════════════════════════════════════════════════════
    Info Bar — 채팅창 하단 현재 설정 표시
@@ -925,16 +925,6 @@
     left: 18px;
 }
 
-
-/* ── 퀵 모드 설정 버튼 (🪄) ── */
-.dp-wand-settings {
-    font-size: 0.85em;
-    opacity: 0.7;
-    transition: opacity 0.15s;
-}
-.dp-wand-settings:hover {
-    opacity: 1;
-}
 
 /* ── 퀵 모드 토글 (패널) ── */
 .dp-toggle {
