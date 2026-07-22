@@ -227,12 +227,12 @@
     display: inline-flex !important;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
-    min-width: 24px;
-    border-radius: 5px;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    border-radius: 6px;
     cursor: pointer;
-    font-size: 0.82rem;
+    font-size: 0.9rem;
     color: inherit;
     transition: background 0.15s;
     flex-shrink: 0;

@@ -12,6 +12,9 @@ const ICON_COLORS = {
     "mint-blue":  "background:linear-gradient(135deg,#34d399,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;",
     blue:         "color:#4D96FF;",
     red:          "color:#e74c3c;",
+    black:        "color:#222;",
+    navy:         "color:#1e3a5f;",
+    gray:         "color:#888;",
 };
 const EMOJI_MAP = { "e-pencil":"✏️","e-memo":"📝","e-pen":"🖊️","e-brush":"🖌️","e-quill":"🪶","e-palette":"🎨","e-gear":"⚙️","e-sparkles":"✨","e-wrench":"🔧","e-magic":"🪄","e-crystal":"🔮" };
 function isEmojiIcon(k) { return k.startsWith("e-"); }
@@ -1648,6 +1651,9 @@ function buildPanelHtml() {
                     <div class="dp-color-dot" data-color="mint-blue" style="background:linear-gradient(135deg,#34d399,#3b82f6)"></div>
                     <div class="dp-color-dot" data-color="blue" style="background:#4D96FF"></div>
                     <div class="dp-color-dot" data-color="red" style="background:#e74c3c"></div>
+                    <div class="dp-color-dot" data-color="black" style="background:#222"></div>
+                    <div class="dp-color-dot" data-color="navy" style="background:#1e3a5f"></div>
+                    <div class="dp-color-dot" data-color="gray" style="background:#888"></div>
                 </div>
             </div>
 
@@ -1673,6 +1679,9 @@ function buildPanelHtml() {
                     <div class="dp-color-dot" data-color="mint-blue" style="background:linear-gradient(135deg,#34d399,#3b82f6)"></div>
                     <div class="dp-color-dot" data-color="blue" style="background:#4D96FF"></div>
                     <div class="dp-color-dot" data-color="red" style="background:#e74c3c"></div>
+                    <div class="dp-color-dot" data-color="black" style="background:#222"></div>
+                    <div class="dp-color-dot" data-color="navy" style="background:#1e3a5f"></div>
+                    <div class="dp-color-dot" data-color="gray" style="background:#888"></div>
                 </div>
             </div>
 
