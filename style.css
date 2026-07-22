@@ -926,6 +926,46 @@
 }
 
 
+/* ── 아이콘 & 색상 피커 (패널) ── */
+.dp-icon-picker {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+}
+.dp-icon-opt {
+    width: 30px; height: 30px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 6px;
+    font-size: 14px;
+    background: var(--dp-surface2);
+    border: 2px solid transparent;
+    cursor: pointer;
+    color: var(--dp-text-muted);
+    transition: all 0.15s;
+}
+.dp-icon-opt:hover { border-color: var(--dp-border); }
+.dp-icon-opt.dp-sel { border-color: var(--dp-accent); color: var(--dp-text); }
+
+.dp-color-picker {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+.dp-color-dot {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: 2.5px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.dp-color-dot:hover { transform: scale(1.15); }
+.dp-color-dot.dp-sel {
+    border-color: var(--dp-text);
+    box-shadow: 0 0 0 2px var(--dp-surface);
+}
+
 /* ── 퀵 모드 토글 (패널) ── */
 .dp-toggle {
     position: relative;

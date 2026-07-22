@@ -4,6 +4,23 @@ const EXT = "한마디";
 const OLD_EXT = "해줘"; // ★ 예전 확장 이름 — 설정 마이그레이션용
 const DEFAULT_GENRES = ["로맨스코메디", "코메디", "일상", "공포", "슬픔"];
 
+const ICON_COLORS = {
+    inherit:      "",
+    rainbow:      "background:linear-gradient(135deg,#FF6B6B,#FFD93D,#6BCB77,#4D96FF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;",
+    "pink-purple":"background:linear-gradient(135deg,#f472b6,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;",
+    coral:        "background:linear-gradient(135deg,#FF6B6B,#ff8e53);-webkit-background-clip:text;-webkit-text-fill-color:transparent;",
+    "mint-blue":  "background:linear-gradient(135deg,#34d399,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;",
+    blue:         "color:#4D96FF;",
+    red:          "color:#e74c3c;",
+};
+const EMOJI_MAP = { "e-pencil":"✏️","e-memo":"📝","e-palette":"🎨","e-gear":"⚙️","e-sparkles":"✨" };
+function isEmojiIcon(k) { return k.startsWith("e-"); }
+function renderIconHtml(iconKey, colorKey) {
+    if (isEmojiIcon(iconKey)) return EMOJI_MAP[iconKey] || "?";
+    const style = ICON_COLORS[colorKey] || "";
+    return `<i class="fa-solid ${iconKey}" style="${style}"></i>`;
+}
+
 let stGenerate  = null;
 let stSave      = null;
 let stGetCtx    = null;
@@ -51,6 +68,10 @@ function getSettings() {
     if (s.lastInstruction == null) s.lastInstruction = "";
     if (s.lastUserMessage == null) s.lastUserMessage = "";
     if (s.quickMode !== true) s.quickMode = false;
+    if (s.penIcon == null) s.penIcon = "fa-pen-nib";
+    if (s.penColor == null) s.penColor = "rainbow";
+    if (s.settingsIcon == null) s.settingsIcon = "fa-palette";
+    if (s.settingsColor == null) s.settingsColor = "rainbow";
     if (s.multiCount !== 3) s.multiCount = 1;
     if (s.profileName == null) s.profileName = "";
     return s;
@@ -1607,6 +1628,54 @@ function buildPanelHtml() {
             </div>
 
             <div class="dp-row">
+                <label class="dp-label">대필 버튼 아이콘</label>
+                <div class="dp-icon-picker" id="dp-pen-icons">
+                    <div class="dp-icon-opt" data-icon="fa-pen-nib"><i class="fa-solid fa-pen-nib"></i></div>
+                    <div class="dp-icon-opt" data-icon="fa-pen-fancy"><i class="fa-solid fa-pen-fancy"></i></div>
+                    <div class="dp-icon-opt" data-icon="fa-paintbrush"><i class="fa-solid fa-paintbrush"></i></div>
+                    <div class="dp-icon-opt" data-icon="fa-pen"><i class="fa-solid fa-pen"></i></div>
+                    <div class="dp-icon-opt" data-icon="fa-pencil"><i class="fa-solid fa-pencil"></i></div>
+                    <div class="dp-icon-opt" data-icon="fa-pen-clip"><i class="fa-solid fa-pen-clip"></i></div>
+                    <div class="dp-icon-opt" data-icon="fa-signature"><i class="fa-solid fa-signature"></i></div>
+                    <div class="dp-icon-opt" data-icon="e-pencil">✏️</div>
+                    <div class="dp-icon-opt" data-icon="e-memo">📝</div>
+                </div>
+                <div class="dp-color-picker" id="dp-pen-colors">
+                    <div class="dp-color-dot" data-color="inherit" style="background:var(--SmartThemeBodyColor,#bbb)"></div>
+                    <div class="dp-color-dot" data-color="rainbow" style="background:linear-gradient(135deg,#FF6B6B,#FFD93D,#6BCB77,#4D96FF)"></div>
+                    <div class="dp-color-dot" data-color="pink-purple" style="background:linear-gradient(135deg,#f472b6,#a78bfa)"></div>
+                    <div class="dp-color-dot" data-color="coral" style="background:linear-gradient(135deg,#FF6B6B,#ff8e53)"></div>
+                    <div class="dp-color-dot" data-color="mint-blue" style="background:linear-gradient(135deg,#34d399,#3b82f6)"></div>
+                    <div class="dp-color-dot" data-color="blue" style="background:#4D96FF"></div>
+                    <div class="dp-color-dot" data-color="red" style="background:#e74c3c"></div>
+                </div>
+            </div>
+
+            <div class="dp-row">
+                <label class="dp-label">설정 버튼 아이콘 <span class="dp-hint">(퀵 모드)</span></label>
+                <div class="dp-icon-picker" id="dp-set-icons">
+                    <div class="dp-icon-opt" data-icon="fa-palette"><i class="fa-solid fa-palette"></i></div>
+                    <div class="dp-icon-opt" data-icon="fa-gear"><i class="fa-solid fa-gear"></i></div>
+                    <div class="dp-icon-opt" data-icon="fa-sliders"><i class="fa-solid fa-sliders"></i></div>
+                    <div class="dp-icon-opt" data-icon="fa-wrench"><i class="fa-solid fa-wrench"></i></div>
+                    <div class="dp-icon-opt" data-icon="fa-wand-magic-sparkles"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+                    <div class="dp-icon-opt" data-icon="fa-swatchbook"><i class="fa-solid fa-swatchbook"></i></div>
+                    <div class="dp-icon-opt" data-icon="e-palette">🎨</div>
+                    <div class="dp-icon-opt" data-icon="e-gear">⚙️</div>
+                    <div class="dp-icon-opt" data-icon="e-sparkles">✨</div>
+                </div>
+                <div class="dp-color-picker" id="dp-set-colors">
+                    <div class="dp-color-dot" data-color="inherit" style="background:var(--SmartThemeBodyColor,#bbb)"></div>
+                    <div class="dp-color-dot" data-color="rainbow" style="background:linear-gradient(135deg,#FF6B6B,#FFD93D,#6BCB77,#4D96FF)"></div>
+                    <div class="dp-color-dot" data-color="pink-purple" style="background:linear-gradient(135deg,#f472b6,#a78bfa)"></div>
+                    <div class="dp-color-dot" data-color="coral" style="background:linear-gradient(135deg,#FF6B6B,#ff8e53)"></div>
+                    <div class="dp-color-dot" data-color="mint-blue" style="background:linear-gradient(135deg,#34d399,#3b82f6)"></div>
+                    <div class="dp-color-dot" data-color="blue" style="background:#4D96FF"></div>
+                    <div class="dp-color-dot" data-color="red" style="background:#e74c3c"></div>
+                </div>
+            </div>
+
+            <div class="dp-row">
                 <label class="dp-label">연결 프로필</label>
                 <div class="dp-genre-row">
                     <select id="dp-panel-profile" class="dp-select">
@@ -1674,6 +1743,28 @@ function injectPanel() {
         });
     }
 
+    // 아이콘 커스터마이즈
+    const s = getSettings();
+    function setupPicker(containerId, settingKey, onApply) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        container.querySelectorAll(".dp-icon-opt, .dp-color-dot").forEach(el => {
+            const val = el.dataset.icon || el.dataset.color;
+            if (val === s[settingKey]) el.classList.add("dp-sel");
+            el.addEventListener("click", () => {
+                container.querySelectorAll(".dp-icon-opt, .dp-color-dot").forEach(e => e.classList.remove("dp-sel"));
+                el.classList.add("dp-sel");
+                s[settingKey] = val;
+                saveSettings();
+                refreshWandIcons();
+            });
+        });
+    }
+    setupPicker("dp-pen-icons", "penIcon");
+    setupPicker("dp-pen-colors", "penColor");
+    setupPicker("dp-set-icons", "settingsIcon");
+    setupPicker("dp-set-colors", "settingsColor");
+
     populateProfileSelect();
     // ST 슬래시커맨드 등록이 약간 늦게 끝나는 경우를 대비한 재시도
     setTimeout(() => populateProfileSelect(), 2000);
@@ -1682,14 +1773,23 @@ function injectPanel() {
 
 function injectWand() {
     if (wandDone || document.getElementById("dp-wand")) { wandDone = true; updateWandMode(); return; }
+    const s = getSettings();
     const btn = document.createElement("div");
     btn.id = "dp-wand"; btn.className = "dp-wand"; btn.title = "한마디 — 인풋 대필";
-    btn.innerHTML = '<i class="fa-solid fa-pen-nib" style="background:linear-gradient(135deg,#FF6B6B,#FFD93D,#6BCB77,#4D96FF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>';
+    btn.innerHTML = renderIconHtml(s.penIcon, s.penColor);
     btn.addEventListener("click", triggerGenerate);
     for (const sel of ["#leftSendForm","#extensionsSendButton","#send_form","#rightSendForm"]) {
         const el = document.querySelector(sel);
         if (el) { el.appendChild(btn); wandDone = true; console.log(`[한마디] ✅ 완드 버튼 → ${sel}`); updateWandMode(); return; }
     }
+}
+
+function refreshWandIcons() {
+    const s = getSettings();
+    const wand = document.getElementById("dp-wand");
+    if (wand) wand.innerHTML = renderIconHtml(s.penIcon, s.penColor);
+    const settingsBtn = document.getElementById("dp-wand-settings");
+    if (settingsBtn) settingsBtn.innerHTML = renderIconHtml(s.settingsIcon, s.settingsColor);
 }
 
 function updateWandMode() {
@@ -1704,7 +1804,7 @@ function updateWandMode() {
             settingsBtn.id = "dp-wand-settings";
             settingsBtn.className = "dp-wand dp-wand-settings";
             settingsBtn.title = "한마디 — 대필 설정";
-            settingsBtn.innerHTML = '<i class="fa-solid fa-palette" style="background:linear-gradient(135deg,#FF6B6B,#FFD93D,#6BCB77,#4D96FF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"></i>';
+            settingsBtn.innerHTML = renderIconHtml(s.settingsIcon, s.settingsColor);
             settingsBtn.addEventListener("click", (e) => {
                 e.stopPropagation();
                 showSettingsPopup();
