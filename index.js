@@ -16,7 +16,7 @@ const ICON_COLORS = {
     navy:         "color:#1e3a5f;",
     gray:         "color:#888;",
 };
-const EMOJI_MAP = { "e-pencil":"✏️","e-memo":"📝","e-pen":"🖊️","e-brush":"🖌️","e-quill":"🪶","e-palette":"🎨","e-gear":"⚙️","e-sparkles":"✨","e-wrench":"🔧","e-magic":"🪄","e-crystal":"🔮" };
+const EMOJI_MAP = { "e-pencil":"✏️","e-memo":"📝","e-pen":"🖊️","e-brush":"🖌️","e-writing":"✍️","e-speech":"💬","e-palette":"🎨","e-gear":"⚙️","e-sparkles":"✨","e-wrench":"🔧","e-magic":"🪄","e-crystal":"🔮" };
 function isEmojiIcon(k) { return k.startsWith("e-"); }
 function renderIconHtml(iconKey, colorKey) {
     if (isEmojiIcon(iconKey)) return EMOJI_MAP[iconKey] || "?";
@@ -1637,11 +1637,12 @@ function buildPanelHtml() {
                     <div class="dp-icon-opt" data-icon="fa-pen-fancy"><i class="fa-solid fa-pen-fancy"></i></div>
                     <div class="dp-icon-opt" data-icon="fa-pen"><i class="fa-solid fa-pen"></i></div>
                     <div class="dp-icon-opt" data-icon="fa-pencil"><i class="fa-solid fa-pencil"></i></div>
-                    <div class="dp-icon-opt" data-icon="fa-paintbrush"><i class="fa-solid fa-paintbrush"></i></div>
                     <div class="dp-icon-opt" data-icon="e-pencil">✏️</div>
                     <div class="dp-icon-opt" data-icon="e-memo">📝</div>
                     <div class="dp-icon-opt" data-icon="e-pen">🖊️</div>
                     <div class="dp-icon-opt" data-icon="e-brush">🖌️</div>
+                    <div class="dp-icon-opt" data-icon="e-writing">✍️</div>
+                    <div class="dp-icon-opt" data-icon="e-speech">💬</div>
                 </div>
                 <div class="dp-color-picker" id="dp-pen-colors">
                     <div class="dp-color-dot" data-color="inherit" style="background:var(--SmartThemeBodyColor,#bbb)"></div>
