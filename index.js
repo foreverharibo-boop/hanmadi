@@ -514,6 +514,33 @@ function insertToInput(text, genre, mode, instruction, replace = false) {
     updateInfoBar(genre, mode, instruction);
 }
 
+// ── 퀵 모드 전용 토스트 ──
+function showQuickToast() {
+    let toast = document.getElementById("dp-quick-toast");
+    if (!toast) {
+        toast = document.createElement("div");
+        toast.id = "dp-quick-toast";
+        toast.className = "dp-quick-toast";
+        toast.innerHTML = `
+            <span class="dp-qt-text"><i class="fa-solid fa-spinner fa-spin"></i> 대필 중…</span>
+            <button class="dp-qt-cancel" id="dp-qt-cancel">취소</button>
+        `;
+        // 인풋 바 위에 배치
+        const sendForm = document.getElementById("send_form") || document.getElementById("leftSendForm");
+        if (sendForm) sendForm.style.position = "relative";
+        sendForm?.insertAdjacentElement("beforebegin", toast);
+    }
+    toast.style.display = "flex";
+    document.getElementById("dp-qt-cancel")?.addEventListener("click", () => {
+        ++generationToken;
+        hideQuickToast();
+    });
+}
+function hideQuickToast() {
+    const toast = document.getElementById("dp-quick-toast");
+    if (toast) toast.style.display = "none";
+}
+
 // ★ 모달은 <html>에 붙임 → ST body transform 완전 차단
 function mount(el) { document.documentElement.appendChild(el); }
 
@@ -1608,17 +1635,17 @@ async function quickGenerate() {
     const mode = s.writingMode || "continue";
 
     const myToken = ++generationToken;
-    showLoading();
+    showQuickToast();
     try {
-        const result = await generate(inst, mode, genre, tone, lang, person, name3rd, lm, tn, () => updateLoadingMessage("AI 대필 중…"), um);
+        const result = await generate(inst, mode, genre, tone, lang, person, name3rd, lm, tn, null, um);
         if (myToken !== generationToken) return;
-        hideLoading();
+        hideQuickToast();
         // 결과 모달 없이 바로 인풋에 삽입
         const combined = um ? `${um}\n${result}` : result;
         insertToInput(combined, genre, mode, inst, !!um);
     } catch (e) {
         if (myToken !== generationToken) return;
-        hideLoading();
+        hideQuickToast();
         showError(e.message || "생성 실패. ST API 연결 상태를 확인해 주세요.");
     }
 }

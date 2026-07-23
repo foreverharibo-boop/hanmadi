@@ -926,6 +926,44 @@
 }
 
 
+/* ── 퀵 모드 토스트 (인풋 위 알약) ── */
+.dp-quick-toast {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 0 auto 6px;
+    padding: 5px 14px;
+    width: fit-content;
+    background: var(--SmartThemeBlurTintColor, var(--dp-surface2));
+    border: 1px solid var(--SmartThemeBorderColor, var(--dp-border));
+    border-radius: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    z-index: 100;
+    animation: dp-toast-in 0.2s ease;
+}
+.dp-qt-text {
+    font-size: 0.8rem;
+    color: var(--SmartThemeBodyColor, var(--dp-text));
+}
+.dp-qt-cancel {
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--SmartThemeBorderColor, var(--dp-border));
+    background: transparent;
+    color: var(--SmartThemeBodyColor, var(--dp-text-muted));
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.dp-qt-cancel:hover {
+    background: var(--SmartThemeHoverColor, rgba(128,128,128,0.15));
+}
+@keyframes dp-toast-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
 /* ── 아이콘 & 색상 피커 (패널) ── */
 .dp-icon-picker {
     display: flex;
