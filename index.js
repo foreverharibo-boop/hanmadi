@@ -534,6 +534,11 @@ function showQuickToast() {
     document.getElementById("dp-qt-cancel")?.addEventListener("click", () => {
         ++generationToken;
         hideQuickToast();
+        // ST의 실제 API 요청도 중단
+        try {
+            const stopBtn = document.getElementById("mes_stop");
+            if (stopBtn) stopBtn.click();
+        } catch (e) { console.warn("[한마디] ST 생성 중단 실패:", e); }
     });
 }
 function hideQuickToast() {
