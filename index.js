@@ -25,6 +25,7 @@ function renderIconHtml(iconKey, colorKey) {
 }
 
 let stGenerate  = null;
+let stGenerateRaw = null;
 let stSave      = null;
 let stGetCtx    = null;
 let stSettings  = null;
@@ -71,6 +72,7 @@ function getSettings() {
     if (s.lastInstruction == null) s.lastInstruction = "";
     if (s.lastUserMessage == null) s.lastUserMessage = "";
     if (s.quickMode !== true) s.quickMode = false;
+    if (s.bgGenerate !== true) s.bgGenerate = false;
     if (s.penIcon == null) s.penIcon = "fa-pen-nib";
     if (s.penColor == null) s.penColor = "rainbow";
     if (s.settingsIcon == null) s.settingsIcon = "fa-palette";
@@ -263,9 +265,10 @@ async function translateInstruction(text) {
     } catch { return text; }
 }
 
-function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, userMessage) {
+function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, userMessage, bgMode) {
     // ★ 채팅 히스토리는 ST가 generateQuietPrompt 호출 시 자동으로 컨텍스트에 포함시킴
     //   → 여기서 getRecentMsgs로 다시 넣으면 같은 대화가 중복 주입되므로 넣지 않음
+    //   단, bgMode(generateRaw)일 때는 ST가 아무것도 안 넣어주므로 캐릭터 설명 + 긴 히스토리를 직접 주입
     const ctx    = getCtx();
     const user   = ctx.name1 || "사용자";
     const char   = ctx.name2 || "캐릭터";
@@ -287,6 +290,12 @@ function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3
     p += `지금부터 당신은 ${user}(사용자)의 다음 메시지를 대신 작성해야 합니다. 캐릭터 입장이 아닌 ${user} 입장으로 작성하세요.\n\n`;
     p += `장르: ${genre}\n작성 형식: ${modeLbl}\n인칭: ${personLbl}\n시제: ${tenseLbl}\n\n`;
     if (persona) p += `## 사용자 페르소나\n${persona}\n\n`;
+    if (bgMode) {
+        // generateRaw는 캐릭터 카드가 자동 포함되지 않으므로 직접 주입
+        const charObj = ctx.characters?.[ctx.characterId];
+        const charDesc = charObj?.description?.trim();
+        if (charDesc) p += `## 상대 캐릭터 (${char}) 설명\n${charDesc}\n\n`;
+    }
     if (userSamples.length) {
         p += `## 형식 참고 (${user} 본인이 실제로 썼던 메시지 예시 — 내용이 아니라 '형식/문체'만 참고할 것)\n`;
         p += userSamples.map((s,i) => `예시${i+1}: ${s}`).join("\n") + "\n\n";
@@ -322,7 +331,7 @@ function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3
 
     // ★ 프롬프트 맨 끝은 모델이 가장 주의 깊게 보는 위치라서, "직전 상황 이어쓰기"랑
     //   "분량 제한"을 따로 두 번 강조하면 서로 경쟁하게 됨 → 하나로 합쳐서 한 번만 마무리
-    const lastTurns = getLastTurns(3);
+    const lastTurns = getLastTurns(bgMode ? 8 : 3);
     const lm = lengthMode || "normal";
     const needsStrictLength = lm === "short" || /^custom:\d+$/.test(lm);
 
@@ -428,9 +437,10 @@ async function withProfile(profileName, fn) {
 }
 
 async function generate(instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, onTranslated, userMessage) {
-    const fn = stGenerate || window.generateQuietPrompt;
-    if (typeof fn !== "function") throw new Error("generateQuietPrompt를 찾을 수 없습니다. ST API 연결을 확인해 주세요.");
     const s = getSettings();
+    const useBg = s.bgGenerate && typeof stGenerateRaw === "function";
+    const fn = stGenerate || window.generateQuietPrompt;
+    if (!useBg && typeof fn !== "function") throw new Error("generateQuietPrompt를 찾을 수 없습니다. ST API 연결을 확인해 주세요.");
     const maxTok = s.maxTokens > 0 ? s.maxTokens : null;
     // 지시사항 자동 번역 (켜져 있고 내용이 한국어인 경우)
     let finalInst = instruction;
@@ -439,9 +449,20 @@ async function generate(instruction, mode, genre, tone, outputLang, person, pers
     }
     // 번역 단계 끝났음을 알려서 로딩 문구를 "AI 대필 중…"으로 바꿀 수 있게 함
     if (typeof onTranslated === "function") onTranslated();
-    return await withProfile(s.profileName, () =>
-        fn(buildPrompt(finalInst, mode, genre, tone, outputLang, person, person3rdName, lengthMode || s.lengthMode, tense || s.tense, userMessage), false, false, null, null, maxTok)
-    );
+    const prompt = buildPrompt(finalInst, mode, genre, tone, outputLang, person, person3rdName, lengthMode || s.lengthMode, tense || s.tense, userMessage, useBg);
+    return await withProfile(s.profileName, async () => {
+        if (useBg) {
+            // 백그라운드 생성 — 채팅 UI에 생성 중 표시 없음
+            try {
+                // 신버전 ST: 객체 파라미터
+                const r = await stGenerateRaw({ prompt, responseLength: maxTok });
+                if (typeof r === "string") return r;
+            } catch (e) { /* 구버전 시그니처로 재시도 */ }
+            // 구버전 ST: positional (prompt, api, instructOverride, quietToLoud, systemPrompt, responseLength)
+            return await stGenerateRaw(prompt, null, false, false, null, maxTok);
+        }
+        return await fn(prompt, false, false, null, null, maxTok);
+    });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1631,6 +1652,17 @@ function buildPanelHtml() {
             </div>
 
             <div class="dp-row">
+                <label class="dp-label">백그라운드 생성</label>
+                <div class="dp-genre-row">
+                    <label class="dp-toggle" title="켜면 채팅 화면에 생성 중 표시 없이 조용히 생성">
+                        <input type="checkbox" id="dp-panel-bggen">
+                        <span class="dp-toggle-slider"></span>
+                    </label>
+                    <span class="dp-hint" style="margin-left:8px;">채팅 UI에 생성 중 표시 없이 조용히 생성</span>
+                </div>
+            </div>
+
+            <div class="dp-row">
                 <label class="dp-label">대필 버튼 아이콘</label>
                 <div class="dp-icon-picker" id="dp-pen-icons">
                     <div class="dp-icon-opt" data-icon="fa-pen-nib"><i class="fa-solid fa-pen-nib"></i></div>
@@ -1754,6 +1786,17 @@ function injectPanel() {
         });
     }
 
+    // 백그라운드 생성 토글
+    const bgToggle = document.getElementById("dp-panel-bggen");
+    if (bgToggle) {
+        const s0 = getSettings();
+        bgToggle.checked = s0.bgGenerate;
+        bgToggle.addEventListener("change", () => {
+            s0.bgGenerate = bgToggle.checked;
+            saveSettings();
+        });
+    }
+
     // 아이콘 커스터마이즈
     const s = getSettings();
     function setupPicker(containerId, settingKey, onApply) {
@@ -1843,6 +1886,7 @@ jQuery(async () => {
     try {
         const m = await import("../../../../script.js");
         stGenerate = m.generateQuietPrompt ?? null;
+        stGenerateRaw = m.generateRaw ?? null;
         stSave     = m.saveSettingsDebounced ?? null;
         stGetCtx   = m.getContext ?? null;
     } catch (e) { console.warn("[한마디] script.js import 실패:", e.message); }
@@ -1858,6 +1902,7 @@ jQuery(async () => {
     } catch (e) { stPowerUser = window.power_user ?? null; }
 
     stGenerate  ??= window.generateQuietPrompt  ?? null;
+    stGenerateRaw ??= window.generateRaw        ?? null;
     stSave      ??= window.saveSettingsDebounced ?? null;
     stGetCtx    ??= window.getContext            ?? null;
     stSettings  ??= window.extension_settings    ?? null;
