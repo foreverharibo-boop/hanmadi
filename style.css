@@ -928,25 +928,36 @@
 
 /* ── 주입 프롬프트 뷰어 (화이트톤 전용) ── */
 .dp-pv-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 99999;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0,0,0,0.35); /* 블러 없는 단순 딤 */
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    z-index: 2147483647 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: rgba(0,0,0,0.35);
     padding: 16px;
+    margin: 0 !important;
+    transform: none !important;
+    box-sizing: border-box;
 }
 .dp-pv-modal {
     display: flex;
     flex-direction: column;
     width: min(640px, 94vw);
-    max-height: 88vh;
+    max-height: 82dvh;
     background: #ffffff;
     color: #333;
     border-radius: 14px;
     padding: 14px 16px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    margin: auto;
+    box-sizing: border-box;
 }
 .dp-pv-header {
     display: flex;
