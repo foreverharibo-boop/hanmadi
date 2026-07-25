@@ -926,10 +926,90 @@
 }
 
 
-/* ── 주입 프롬프트 뷰어 ── */
-.dp-modal-wide {
-    max-width: min(680px, 94vw) !important;
-    width: 94vw;
+/* ── 주입 프롬프트 뷰어 (화이트톤 전용) ── */
+.dp-pv-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.35); /* 블러 없는 단순 딤 */
+    padding: 16px;
+}
+.dp-pv-modal {
+    display: flex;
+    flex-direction: column;
+    width: min(640px, 94vw);
+    max-height: 88vh;
+    background: #ffffff;
+    color: #333;
+    border-radius: 14px;
+    padding: 14px 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+}
+.dp-pv-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+.dp-pv-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #333;
+}
+.dp-pv-close {
+    width: 26px; height: 26px;
+    border: none;
+    border-radius: 6px;
+    background: #f2f2f2;
+    color: #666;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+.dp-pv-close:hover { background: #e6e6e6; }
+.dp-pv-info {
+    font-size: 0.7rem;
+    color: #999;
+    margin-bottom: 6px;
+}
+.dp-pv-text {
+    flex: 1;
+    min-height: 45vh;
+    resize: none;
+    border: 1px solid #e4e4e4;
+    border-radius: 10px;
+    background: #fafafa;
+    color: #333;
+    font-size: 0.68rem;
+    line-height: 1.5;
+    padding: 10px;
+    white-space: pre-wrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.dp-pv-text:focus { outline: none; border-color: #ccc; }
+.dp-pv-footer {
+    display: flex;
+    margin-top: 8px;
+}
+.dp-pv-copy {
+    flex: 1;
+    padding: 7px 0;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    background: #f7f7f7;
+    color: #444;
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.dp-pv-copy:hover { background: #ededed; }
+.dp-pv-note {
+    font-size: 0.65rem;
+    color: #aaa;
+    margin-top: 8px;
+    line-height: 1.45;
 }
 
 /* ── 퀵 모드 토스트 (인풋 위 알약) ── */

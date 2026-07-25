@@ -400,7 +400,7 @@ function showPromptViewer() {
     rm("dp-prompt-viewer");
     const el = document.createElement("div");
     el.id = "dp-prompt-viewer";
-    el.className = "dp-overlay";
+    el.className = "dp-pv-overlay";
     const info = lastBuiltPrompt
         ? `${lastBuiltPrompt.time.toLocaleTimeString()} 생성 · ${lastBuiltPrompt.text.length}자 · ${lastBuiltPrompt.bgMode ? "백그라운드 모드" : "일반 모드"}`
         : "";
@@ -408,19 +408,17 @@ function showPromptViewer() {
         ? lastBuiltPrompt.text
         : "아직 생성된 프롬프트가 없습니다.\n대필을 한 번 실행하면 여기서 주입된 프롬프트 전문을 볼 수 있어요.";
     el.innerHTML = `
-    <div class="dp-modal dp-modal-wide">
-        <div class="dp-modal-header">
-            <span>📋 주입 프롬프트 로그</span>
-            <button class="dp-close" id="dp-pv-close">✕</button>
+    <div class="dp-pv-modal">
+        <div class="dp-pv-header">
+            <span class="dp-pv-title">📋 주입 프롬프트 로그</span>
+            <button class="dp-pv-close" id="dp-pv-close">✕</button>
         </div>
-        <div class="dp-modal-body">
-            ${info ? `<div class="dp-hint" style="margin-bottom:8px;">${info}</div>` : ""}
-            <textarea class="dp-result-textarea" readonly style="min-height:50vh;font-size:0.78rem;white-space:pre-wrap;">${escHtml(body)}</textarea>
-            <div style="display:flex;gap:8px;margin-top:8px;">
-                <button class="dp-btn" id="dp-pv-copy" style="flex:1;"><i class="fa-solid fa-copy"></i> 복사</button>
-            </div>
-            <div class="dp-hint" style="margin-top:8px;">※ 백그라운드 모드가 꺼져 있으면 이 프롬프트 외에 ST가 캐릭터 카드·로어북·채팅 히스토리를 자동으로 추가합니다. 그 부분은 ST의 프롬프트 인스펙터에서 확인하세요.</div>
+        ${info ? `<div class="dp-pv-info">${info}</div>` : ""}
+        <textarea class="dp-pv-text" readonly>${escHtml(body)}</textarea>
+        <div class="dp-pv-footer">
+            <button class="dp-pv-copy" id="dp-pv-copy"><i class="fa-solid fa-copy"></i> 복사</button>
         </div>
+        <div class="dp-pv-note">※ 백그라운드 모드가 꺼져 있으면 이 프롬프트 외에 ST가 캐릭터 카드·로어북·채팅 히스토리를 자동으로 추가합니다.</div>
     </div>`;
     mount(el);
     el.querySelector("#dp-pv-close").addEventListener("click", () => el.remove());
