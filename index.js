@@ -1755,8 +1755,9 @@ function buildPanelHtml() {
                         <input type="checkbox" id="dp-panel-bggen">
                         <span class="dp-toggle-slider"></span>
                     </label>
-                    <span class="dp-hint" style="margin-left:8px;">채팅 UI에 생성 중 표시 없이 조용히 생성</span>
+                    <span class="dp-hint" style="margin-left:8px;">생성 중 표시 없이 조용히 생성 + 토큰 대폭 절약</span>
                 </div>
+                <div class="dp-hint" style="margin-top:4px;">⚠️ 켜면 ST 기본 주입(전체 히스토리·로어북·시스템 프롬프트)을 우회하고, 캐릭터 설명 + 페르소나 + 직전 8턴만 전송돼. 비용은 크게 줄지만 오래된 맥락·로어북은 반영 안 됨. 끄면 ST가 평소처럼 전부 포함.</div>
             </div>
 
             <div class="dp-row">
