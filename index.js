@@ -109,7 +109,10 @@ function syncTheme() {
 
 function getCtx() {
     if (typeof stGetCtx === "function") return stGetCtx();
+    // 최신 ST 표준 API
+    if (typeof window.SillyTavern?.getContext === "function") return window.SillyTavern.getContext();
     if (typeof window.getContext === "function") return window.getContext();
+    console.warn("[한마디] ⚠️ getContext를 찾을 수 없음 — 채팅 히스토리/페르소나가 프롬프트에 포함되지 않습니다!");
     return {};
 }
 
@@ -2002,12 +2005,13 @@ jQuery(async () => {
         stPowerUser = m.power_user ?? null;
     } catch (e) { stPowerUser = window.power_user ?? null; }
 
-    stGenerate  ??= window.generateQuietPrompt  ?? null;
-    stGenerateRaw ??= window.generateRaw        ?? null;
-    stSave      ??= window.saveSettingsDebounced ?? null;
-    stGetCtx    ??= window.getContext            ?? null;
-    stSettings  ??= window.extension_settings    ?? null;
-    stPowerUser ??= window.power_user            ?? null;
+    const stApi = window.SillyTavern?.getContext?.();
+    stGenerate  ??= window.generateQuietPrompt  ?? stApi?.generateQuietPrompt ?? null;
+    stGenerateRaw ??= window.generateRaw        ?? stApi?.generateRaw ?? null;
+    stSave      ??= window.saveSettingsDebounced ?? stApi?.saveSettingsDebounced ?? null;
+    stGetCtx    ??= window.getContext            ?? (window.SillyTavern?.getContext?.bind(window.SillyTavern)) ?? null;
+    stSettings  ??= window.extension_settings    ?? stApi?.extensionSettings ?? null;
+    stPowerUser ??= window.power_user            ?? stApi?.powerUserSettings ?? null;
 
     tryInject();
 
