@@ -185,20 +185,20 @@ function buildToneSentence(formality, playfulness) {
     const p = Math.max(0, Math.min(100, playfulness ?? 50));
 
     let fSentence;
-    if (f <= 20) fSentence = "정중하고 격식 있는 존댓말체로";
-    else if (f <= 40) fSentence = "예의를 갖춘 존댓말 위주로";
-    else if (f <= 60) fSentence = "존댓말과 반말이 자연스럽게 섞인 어투로";
-    else if (f <= 80) fSentence = "편안한 반말과 구어체 위주로";
-    else fSentence = "완전히 편한 반말과 구어체로, 격식을 차리지 않고";
+    if (f <= 20) fSentence = "in a polite, formal register (formal/honorific speech in Korean)";
+    else if (f <= 40) fSentence = "in a mostly polite register";
+    else if (f <= 60) fSentence = "in a natural mix of polite and casual speech";
+    else if (f <= 80) fSentence = "in mostly casual, colloquial speech";
+    else fSentence = "in fully casual, informal colloquial speech with no formality";
 
     let pSentence;
-    if (p <= 20) pSentence = "진지하고 무게감 있는 분위기로";
-    else if (p <= 40) pSentence = "차분하고 진지한 톤을 유지하며";
-    else if (p <= 60) pSentence = "무난한 톤으로";
-    else if (p <= 80) pSentence = "유머와 장난기를 살짝 섞어";
-    else pSentence = "장난스럽고 가벼운 분위기로, 유머를 적극적으로 살려";
+    if (p <= 20) pSentence = "with a serious, weighty mood";
+    else if (p <= 40) pSentence = "keeping a calm, serious tone";
+    else if (p <= 60) pSentence = "with a neutral tone";
+    else if (p <= 80) pSentence = "with a light touch of humor and playfulness";
+    else pSentence = "with a playful, lighthearted mood, actively using humor";
 
-    return `${fSentence}, ${pSentence} 작성하세요.`;
+    return `Write ${fSentence}, ${pSentence}.`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -257,15 +257,15 @@ function genreToneHint(genreName) {
 // 길이 모드 → 프롬프트 문장
 function lengthSentence(mode) {
     if (mode === "short")
-        return "**절대 규칙**: 서술+대사를 전부 합쳐서 문장을 총 3개까지만 쓸 수 있습니다. 마침표(.)·물음표(?)·느낌표(!)·대사 끝(\")을 기준으로 문장이 하나씩 끝난 것으로 셉니다. 쓰기 전에 몇 번째 문장인지 속으로 세면서 쓰고, 3번째 문장을 다 쓰면 그 즉시 멈추세요. 4번째 문장은 존재해서는 안 됩니다.";
+        return "**ABSOLUTE RULE**: You may write a total of 3 sentences maximum, counting narration and dialogue combined. A sentence ends at a period (.), question mark (?), exclamation mark (!), or closing quote (\"). Count each sentence as you write, and stop immediately after the 3rd sentence. A 4th sentence must not exist.";
     if (mode === "long")
-        return "분량에 제한을 두지 말고 충분히 길고 풍부하게 작성하세요.";
+        return "Do not limit the length — write generously, with rich and detailed prose.";
     const customMatch = /^custom:(\d+)$/.exec(mode || "");
     if (customMatch) {
         const n = customMatch[1];
-        return `**절대 규칙**: 공백을 포함한 전체 글자수가 반드시 ${n}자 이하여야 합니다. ${n}자를 단 한 글자도 넘기면 안 됩니다. 한 글자씩 써나가면서 지금까지 몇 자를 썼는지 계속 세고, ${n}자에 도달하면 문장 중간이라도 즉시 멈추세요.`;
+        return `**ABSOLUTE RULE**: The total output, including spaces, must be at most ${n} characters. Do not exceed ${n} characters by even one. Keep counting as you write, and stop immediately when you reach ${n} characters, even mid-sentence.`;
     }
-    return "**절대 규칙**: 서술+대사를 전부 합쳐서 문장을 총 10개까지만 쓸 수 있습니다. 10번째 문장을 다 쓰면 그 즉시 멈추세요.";
+    return "**ABSOLUTE RULE**: You may write a total of 10 sentences maximum, counting narration and dialogue combined. Stop immediately after the 10th sentence.";
 }
 
 // 지시사항 한→영 자동 번역 (autoTranslateInst 켜져 있을 때)
@@ -287,61 +287,61 @@ function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3
     //   → 여기서 getRecentMsgs로 다시 넣으면 같은 대화가 중복 주입되므로 넣지 않음
     //   단, bgMode(generateRaw)일 때는 ST가 아무것도 안 넣어주므로 캐릭터 설명 + 긴 히스토리를 직접 주입
     const ctx    = getCtx();
-    const user   = ctx.name1 || "사용자";
-    const char   = ctx.name2 || "캐릭터";
+    const user   = ctx.name1 || "User";
+    const char   = ctx.name2 || "Character";
     const persona = getPersonaDesc();
-    const modeLbl = { both:"서술과 대사를 함께", dialogue:"대사만 (서술 없이)", narration:"서술만 (대사 없이)" }[mode] || "서술과 대사를 함께";
+    const modeLbl = { both:"a mix of narration and dialogue", dialogue:"dialogue only (no narration)", narration:"narration only (no dialogue)" }[mode] || "a mix of narration and dialogue";
     const t      = tone || DEFAULT_TONE;
-    const tenseLbl = { past:"과거형", present:"현재형", future:"미래형" }[tense] || "현재형";
+    const tenseLbl = { past:"past tense", present:"present tense", future:"future tense" }[tense] || "present tense";
 
     const is3rd = person === "3rd";
     const name3rd = (is3rd && person3rdName?.trim()) ? person3rdName.trim() : null;
     const personLbl = is3rd
-        ? (name3rd ? `3인칭 — 주인공 이름: ${name3rd}` : `3인칭 (이름이 별도 지정되지 않음 — 아래 [중요 규칙] 참고)`)
-        : "1인칭 (나/저 등 1인칭 시점)";
+        ? (name3rd ? `third person — protagonist name: ${name3rd}` : `third person (no name specified — see [Critical Rules] below)`)
+        : "first person (I/me perspective)";
 
     // 형식 참고용 — 유저 본인이 과거에 실제로 쓴 메시지 스타일 (내용 아님, 형식만)
     const userSamples = getUserMessageSamples(3);
 
-    let p = `# 대필 지시\n`;
-    p += `지금부터 당신은 ${user}(사용자)의 다음 메시지를 대신 작성해야 합니다. 캐릭터 입장이 아닌 ${user} 입장으로 작성하세요.\n\n`;
-    p += `장르: ${genre}\n작성 형식: ${modeLbl}\n인칭: ${personLbl}\n시제: ${tenseLbl}\n\n`;
-    if (persona) p += `## 사용자 페르소나\n${persona}\n\n`;
+    let p = `# Ghost-writing Task\n`;
+    p += `You must now write the next message on behalf of ${user} (the user). Write from ${user}'s perspective, NOT the character's perspective.\n\n`;
+    p += `Genre: ${genre}\nFormat: ${modeLbl}\nPerson: ${personLbl}\nTense: ${tenseLbl}\n\n`;
+    if (persona) p += `## User Persona\n${persona}\n\n`;
     if (bgMode) {
         // generateRaw는 캐릭터 카드가 자동 포함되지 않으므로 직접 주입
         const charObj = ctx.characters?.[ctx.characterId];
         const charDesc = charObj?.description?.trim();
-        if (charDesc) p += `## 상대 캐릭터 (${char}) 설명\n${charDesc}\n\n`;
+        if (charDesc) p += `## Counterpart Character (${char}) Description\n${charDesc}\n\n`;
     }
     if (userSamples.length) {
-        p += `## 형식 참고 (${user} 본인이 실제로 썼던 메시지 예시 — 내용이 아니라 '형식/문체'만 참고할 것)\n`;
-        p += userSamples.map((s,i) => `예시${i+1}: ${s}`).join("\n") + "\n\n";
+        p += `## Style Reference (messages ${user} actually wrote — reference the FORMAT/STYLE only, not the content)\n`;
+        p += userSamples.map((s,i) => `Example ${i+1}: ${s}`).join("\n") + "\n\n";
     }
-    if (instruction?.trim()) p += `## 추가 지시\n${instruction.trim()}\n\n`;
-    p += `## 톤 지침\n${buildToneSentence(t.formality, t.playfulness)}\n\n`;
-    p += `## 분량 지침\n${lengthSentence(lengthMode || "normal")}\n\n`;
-    p += `## 시제 지침\n메시지 전체를 ${tenseLbl}으로 작성하세요.\n\n`;
-    p += `## 요청\n`;
-    p += `직전 대화 흐름을 반드시 읽고, 바로 직전 ${char}의 마지막 메시지와 상황에 자연스럽게 이어지는 ${user}의 다음 메시지를 ${modeLbl}로 대필하세요.\n`;
-    p += `\n[중요 규칙]\n`;
-    p += `- 반드시 직전 대화 내용과 이어지는 답변/반응을 작성하세요. 대화 흐름을 무시하거나 새로운 상황을 임의로 만들지 마세요.\n`;
-    p += `- ${char}이 마지막으로 한 말/행동에 ${user}가 어떻게 반응할지를 중심으로 작성하세요.\n`;
-    p += `- 대화에 없는 사건, 인물, 배경을 새로 지어내지 마세요.\n`;
-    p += `- 장르(${genre}) 분위기는 유지하되, 내용은 반드시 현재 대화 맥락에서 출발해야 합니다.\n`;
-    p += `- [형식 오염 금지] 최근 대화 속 ${char}의 메시지에 날씨/날짜/위치/상태창/스탯 같은 정보블록이나 시스템 태그가 있더라도, 그건 ${char}의 형식일 뿐입니다. 그런 정보블록·태그·괄호 형식을 절대 따라 하지 마세요. 오직 위 [형식 참고]에 나온 것처럼 ${user} 본인이 실제로 쓰는 순수한 대화체 메시지만 작성하세요.\n`;
+    if (instruction?.trim()) p += `## Additional Instructions\n${instruction.trim()}\n\n`;
+    p += `## Tone\n${buildToneSentence(t.formality, t.playfulness)}\n\n`;
+    p += `## Length\n${lengthSentence(lengthMode || "normal")}\n\n`;
+    p += `## Tense\nWrite the entire message in ${tenseLbl}.\n\n`;
+    p += `## Request\n`;
+    p += `Carefully read the recent conversation flow, and ghost-write ${user}'s next message so it naturally follows ${char}'s most recent message and the current situation, using ${modeLbl}.\n`;
+    p += `\n[Critical Rules]\n`;
+    p += `- Your reply MUST directly continue from the recent conversation. Never ignore the flow or invent a new situation.\n`;
+    p += `- Focus on how ${user} would react to what ${char} last said/did.\n`;
+    p += `- Do not invent events, characters, or settings that are not in the conversation.\n`;
+    p += `- Keep the genre (${genre}) mood, but the content must start from the current conversation context.\n`;
+    p += `- [No Format Contamination] Even if ${char}'s recent messages contain info blocks or system tags (weather/date/location/status/stats etc.), that is ${char}'s formatting only. NEVER imitate those info blocks, tags, or bracket formats. Write only a pure conversational message the way ${user} actually writes, as shown in [Style Reference] above.\n`;
     if (is3rd && name3rd) {
-        p += `- 반드시 3인칭으로 작성하세요. 주인공을 '나'가 아닌 '${name3rd}'(으)로 지칭하세요.\n`;
-        p += `- 예시 형식: "${name3rd}가 말했다. \\"대사\\"" / "${name3rd}는 ~했다." 형태로 서술하세요.\n`;
+        p += `- Write strictly in third person. Refer to the protagonist as '${name3rd}', never 'I'.\n`;
+        p += `- Example format: "${name3rd} said, \\"...\\"" / "${name3rd} did ~."\n`;
     } else if (is3rd) {
-        p += `- 반드시 3인칭으로 작성하세요.\n`;
-        p += `- 먼저 위 [사용자 페르소나] 설명에 성별을 짐작할 수 있는 단서(이름, 외모, 관계 호칭 등)가 있는지 확인하세요. 단서가 있으면 그것에 맞춰 '그' 또는 '그녀' 중 하나로만 일관되게 지칭하세요.\n`;
-        p += `- 단서가 없어서 성별을 확신할 수 없으면, '그'나 '그녀'를 함부로 추측해서 쓰지 마세요. 대신 '${user}'라는 이름을 대명사처럼 반복해서 사용하세요 (예: "${user}가 ~했다. ${user}는 ~라고 말했다.").\n`;
+        p += `- Write strictly in third person.\n`;
+        p += `- First, check the [User Persona] above for clues about gender (name, appearance, relationship terms, etc.). If clues exist, consistently use 'he' or 'she' (그/그녀) accordingly.\n`;
+        p += `- If there are no clues and you cannot be sure of the gender, do NOT guess 'he' or 'she'. Instead, repeatedly use the name '${user}' like a pronoun (e.g. "${user} did ~. ${user} said ~.").\n`;
     } else {
-        p += `- 반드시 1인칭(나/저 등)으로 작성하세요.\n`;
+        p += `- Write strictly in first person (I/me).\n`;
     }
-    p += `- 반드시 ${tenseLbl}으로 작성하세요.\n`;
-    if (persona) p += `- 페르소나 성격·말투를 반드시 반영하세요.\n`;
-    p += `- 메타 설명 없이 실제 메시지 내용만 출력하세요.\n\n`;
+    p += `- Write strictly in ${tenseLbl}.\n`;
+    if (persona) p += `- Reflect the persona's personality and speech style faithfully.\n`;
+    p += `- Output only the actual message content, with no meta commentary.\n\n`;
 
     // 유저가 이미 작성한 부분 — 직전 대화 뒤, 마지막 정리 직전에 배치
     const hasUserMsg = userMessage?.trim();
@@ -353,39 +353,39 @@ function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3
     const needsStrictLength = lm === "short" || /^custom:\d+$/.test(lm);
 
     if (lastTurns.length) {
-        p += `## 직전 대화 (최근 ${lastTurns.length}턴 — 아래 흐름에 자연스럽게 이어지는 답변을 쓸 것)\n`;
+        p += `## Recent Conversation (last ${lastTurns.length} turns — your reply must naturally continue this flow)\n`;
         p += lastTurns.join("\n") + "\n\n";
     }
 
     // 유저가 이미 작성한 부분 → 직전 대화 뒤, 마지막 정리 직전 = 모델이 가장 직접적으로 이어받는 위치
     if (hasUserMsg) {
-        p += `## ${user}가 이미 작성한 부분 (이어쓰기 시작점)\n`;
+        p += `## Text ${user} Already Wrote (continuation starting point)\n`;
         p += `${userMessage.trim()}\n\n`;
-        p += `[핵심 규칙] 위 텍스트는 ${user}가 이미 직접 쓴 부분입니다.\n`;
-        p += `- 이 내용을 절대 반복하거나 요약하지 마세요.\n`;
-        p += `- 당신의 출력은 위 텍스트의 마지막 글자 바로 뒤에 붙습니다.\n`;
-        p += `- 문장 중간이면 그 문장을 자연스럽게 이어서 완성하세요.\n`;
-        p += `- 문장이 끝난 상태면 다음 문장부터 시작하세요.\n`;
-        p += `- 문체, 어투, 분위기, 말투를 위 텍스트와 동일하게 유지하세요. 갑자기 톤이 바뀌면 안 됩니다.\n`;
-        p += `- 위 텍스트와 당신의 출력을 합쳤을 때, 한 사람이 처음부터 끝까지 쓴 것처럼 읽혀야 합니다.\n\n`;
+        p += `[Core Rule] The text above was already written by ${user} directly.\n`;
+        p += `- NEVER repeat or summarize it.\n`;
+        p += `- Your output attaches immediately after the last character of the text above.\n`;
+        p += `- If it ends mid-sentence, complete that sentence naturally.\n`;
+        p += `- If the sentence is complete, start from the next sentence.\n`;
+        p += `- Keep the exact same style, register, mood, and voice as the text above. The tone must not suddenly change.\n`;
+        p += `- When the text above and your output are combined, it must read as if one person wrote it from start to finish.\n\n`;
     }
 
-    p += `## 마지막 정리\n`;
+    p += `## Final Reminders\n`;
     if (lastTurns.length) {
-        p += `위 [직전 대화]가 방금 일어난 일입니다. 절대 무시하거나 다른 상황을 지어내지 말고, 특히 마지막 줄(${char}의 가장 최근 메시지)을 반드시 직접 이어받아서 ${user}의 반응을 쓰세요.\n`;
+        p += `The [Recent Conversation] above just happened. Never ignore it or invent a different situation — especially, directly pick up from the last line (${char}'s most recent message) and write ${user}'s reaction to it.\n`;
     }
     if (hasUserMsg) {
-        p += `[이어쓰기] 바로 위에 ${user}가 이미 작성한 텍스트가 있습니다. 당신의 출력 첫 글자가 그 텍스트의 마지막 글자 바로 뒤에 자연스럽게 붙어야 합니다. 이미 쓴 부분을 절대 반복하지 말고, 문체와 어투를 일관되게 유지해서 하나의 글처럼 읽히게 하세요.\n`;
+        p += `[Continuation] Right above is text ${user} already wrote. The first character of your output must attach naturally right after the last character of that text. Never repeat what was already written, and keep the style and voice consistent so it reads as one seamless piece.\n`;
     }
     if (needsStrictLength) {
-        p += `그리고 그 답변을 쓸 때 ${lengthSentence(lm)}\n`;
-        p += `맥락을 잘 이어가는 것과 분량을 지키는 것 둘 다 반드시 지키세요 — 분량 때문에 맥락을 무시하거나, 맥락 때문에 분량을 넘기지 마세요.\n`;
+        p += `And when writing that reply: ${lengthSentence(lm)}\n`;
+        p += `You must satisfy BOTH continuity and the length limit — never sacrifice one for the other.\n`;
     }
     p += `\n`;
 
     p += outputLang === "en"
         ? `## Output Language\nWrite only in English.`
-        : `## 출력 언어\n반드시 한국어로만 출력하세요.`;
+        : `## Output Language\nWrite only in Korean (한국어). The instructions above are in English, but your entire output must be in Korean.`;
 
     // ★ 디버그 로그 — 실제로 주입되는 프롬프트 전문을 콘솔에서 확인 가능
     console.groupCollapsed(`[한마디] 📋 대필 프롬프트 (${p.length}자, bgMode=${!!bgMode})`);
