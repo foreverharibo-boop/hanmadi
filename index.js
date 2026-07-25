@@ -123,9 +123,20 @@ function getLastTurns(n = 3) {
     const user = ctx.name1 || "사용자";
     const char = ctx.name2 || "캐릭터";
     const chat = (ctx.chat || []).filter(m => !m.is_system && m.mes?.trim());
-    return chat.slice(-n).map(m => {
+    const sliced = chat.slice(-n);
+    return sliced.map((m, i) => {
         const speaker = m.is_user ? user : char;
-        return `[${speaker}]: ${m.mes.trim().slice(0, 600)}`;
+        const isLast = i === sliced.length - 1;
+        // ★ 마지막 메시지(가장 최근 상황)는 자르지 않고 전체 포함 — 이어쓰기의 핵심
+        //   이전 턴들만 뒷부분 500자 유지 (앞을 버리고 뒤를 남김)
+        const t = m.mes.trim();
+        let text;
+        if (isLast) {
+            text = t;
+        } else {
+            text = t.length > 500 ? `…(앞부분 생략) ${t.slice(-500)}` : t;
+        }
+        return `[${speaker}]: ${text}`;
     });
 }
 
@@ -265,6 +276,9 @@ async function translateInstruction(text) {
     } catch { return text; }
 }
 
+// 마지막으로 조립된 프롬프트 (패널의 "주입 프롬프트 보기"용)
+let lastBuiltPrompt = null;
+
 function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, userMessage, bgMode) {
     // ★ 채팅 히스토리는 ST가 generateQuietPrompt 호출 시 자동으로 컨텍스트에 포함시킴
     //   → 여기서 getRecentMsgs로 다시 넣으면 같은 대화가 중복 주입되므로 넣지 않음
@@ -369,7 +383,55 @@ function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3
     p += outputLang === "en"
         ? `## Output Language\nWrite only in English.`
         : `## 출력 언어\n반드시 한국어로만 출력하세요.`;
+
+    // ★ 디버그 로그 — 실제로 주입되는 프롬프트 전문을 콘솔에서 확인 가능
+    console.groupCollapsed(`[한마디] 📋 대필 프롬프트 (${p.length}자, bgMode=${!!bgMode})`);
+    console.log(p);
+    console.groupEnd();
+    lastBuiltPrompt = { text: p, time: new Date(), bgMode: !!bgMode };
+
     return p;
+}
+
+function showPromptViewer() {
+    rm("dp-prompt-viewer");
+    const el = document.createElement("div");
+    el.id = "dp-prompt-viewer";
+    el.className = "dp-overlay";
+    const info = lastBuiltPrompt
+        ? `${lastBuiltPrompt.time.toLocaleTimeString()} 생성 · ${lastBuiltPrompt.text.length}자 · ${lastBuiltPrompt.bgMode ? "백그라운드 모드" : "일반 모드"}`
+        : "";
+    const body = lastBuiltPrompt
+        ? lastBuiltPrompt.text
+        : "아직 생성된 프롬프트가 없습니다.\n대필을 한 번 실행하면 여기서 주입된 프롬프트 전문을 볼 수 있어요.";
+    el.innerHTML = `
+    <div class="dp-modal dp-modal-wide">
+        <div class="dp-modal-header">
+            <span>📋 주입 프롬프트 로그</span>
+            <button class="dp-close" id="dp-pv-close">✕</button>
+        </div>
+        <div class="dp-modal-body">
+            ${info ? `<div class="dp-hint" style="margin-bottom:8px;">${info}</div>` : ""}
+            <textarea class="dp-result-textarea" readonly style="min-height:50vh;font-size:0.78rem;white-space:pre-wrap;">${escHtml(body)}</textarea>
+            <div style="display:flex;gap:8px;margin-top:8px;">
+                <button class="dp-btn" id="dp-pv-copy" style="flex:1;"><i class="fa-solid fa-copy"></i> 복사</button>
+            </div>
+            <div class="dp-hint" style="margin-top:8px;">※ 백그라운드 모드가 꺼져 있으면 이 프롬프트 외에 ST가 캐릭터 카드·로어북·채팅 히스토리를 자동으로 추가합니다. 그 부분은 ST의 프롬프트 인스펙터에서 확인하세요.</div>
+        </div>
+    </div>`;
+    mount(el);
+    el.querySelector("#dp-pv-close").addEventListener("click", () => el.remove());
+    el.addEventListener("click", (e) => { if (e.target === el) el.remove(); });
+    el.querySelector("#dp-pv-copy").addEventListener("click", async () => {
+        try {
+            await navigator.clipboard.writeText(body);
+            el.querySelector("#dp-pv-copy").innerHTML = '<i class="fa-solid fa-check"></i> 복사됨';
+        } catch (e) { console.warn("복사 실패:", e); }
+    });
+}
+
+function escHtml(s) {
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1751,6 +1813,10 @@ function buildPanelHtml() {
             </div>
 
             <div class="dp-row">
+                <button id="dp-panel-promptview" class="dp-btn" style="width:100%;"><i class="fa-solid fa-file-lines"></i> 주입 프롬프트 보기</button>
+            </div>
+
+            <div class="dp-row">
                 <label class="dp-label">연결 프로필</label>
                 <div class="dp-genre-row">
                     <select id="dp-panel-profile" class="dp-select">
@@ -1828,6 +1894,9 @@ function injectPanel() {
             saveSettings();
         });
     }
+
+    // 주입 프롬프트 보기
+    document.getElementById("dp-panel-promptview")?.addEventListener("click", showPromptViewer);
 
     // 아이콘 커스터마이즈
     const s = getSettings();

@@ -926,6 +926,12 @@
 }
 
 
+/* ── 주입 프롬프트 뷰어 ── */
+.dp-modal-wide {
+    max-width: min(680px, 94vw) !important;
+    width: 94vw;
+}
+
 /* ── 퀵 모드 토스트 (인풋 위 알약) ── */
 .dp-quick-toast {
     display: none;
