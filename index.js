@@ -26,6 +26,7 @@ function renderIconHtml(iconKey, colorKey) {
 
 let stGenerate  = null;
 let stGenerateRaw = null;
+let stConnectionRequest = null;
 let stSave      = null;
 let stGetCtx    = null;
 let stSettings  = null;
@@ -43,7 +44,7 @@ function getSettings() {
         toneFormality: DEFAULT_TONE.formality, tonePlayfulness: DEFAULT_TONE.playfulness,
         outputLang: "ko", presets: [], translateMaxTokens: 1000, person: "1st", person3rdName: "",
         lengthMode: "normal", autoTranslateInst: false, defaultEmotions: [], tense: "present", lastPresetId: null,
-        profileName: "", multiCount: 1, lastInstruction: "",
+        profileId: "", profileName: "", multiCount: 1, lastInstruction: "",
     };
     // ★ 확장 이름이 "해줘" → "한마디"로 바뀌면서, 예전 설정(프리셋 등)을 한 번만 그대로 옮겨옴
     if (!stSettings[EXT] && stSettings[OLD_EXT]) {
@@ -78,6 +79,8 @@ function getSettings() {
     if (s.settingsIcon == null) s.settingsIcon = "fa-palette";
     if (s.settingsColor == null) s.settingsColor = "rainbow";
     if (s.multiCount !== 3) s.multiCount = 1;
+    if (s.profileId == null) s.profileId = "";
+    // profileName은 구버전 설정(이름 저장 방식)을 profileId로 옮기기 위한 마이그레이션용
     if (s.profileName == null) s.profileName = "";
     return s;
 }
@@ -440,68 +443,30 @@ function escHtml(s) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  연결 프로필 전환 (전용 프로필 지정 시, 생성 동안만 잠깐 전환했다가 복구)
+//  전용 연결 프로필 요청 (현재 활성 프로필은 절대 변경하지 않음)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function execSlash(cmd) {
-    // 슬래시커맨드 실행은 script.js 내부 getContext가 아니라
-    // ST가 확장 개발자용으로 공식 제공하는 전역 SillyTavern.getContext()를 써야 함
-    // (executeSlashCommandsWithOptions가 내부 getContext엔 없는 경우가 있음)
-    const officialCtx = window.SillyTavern?.getContext?.();
-    const ctx = (officialCtx && typeof officialCtx.executeSlashCommandsWithOptions === "function")
-        ? officialCtx
-        : getCtx();
-    if (typeof ctx.executeSlashCommandsWithOptions !== "function") {
-        console.warn("[한마디] executeSlashCommandsWithOptions를 찾을 수 없음 (SillyTavern.getContext 미노출?)");
-        return Promise.resolve(null);
+async function requestWithProfile(profileId, prompt, maxTokens) {
+    if (!stConnectionRequest || typeof stConnectionRequest.sendRequest !== "function") {
+        throw new Error("전용 연결 프로필 요청 기능을 찾을 수 없습니다. SillyTavern 1.18 이상인지 확인해 주세요.");
     }
-    return ctx.executeSlashCommandsWithOptions(cmd, { handleParserErrors: true, handleExecutionErrors: true });
-}
-
-async function getCurrentProfileName() {
-    try { return ((await execSlash("/profile"))?.pipe ?? "").trim(); }
-    catch { return ""; }
-}
-
-async function waitUntilProfileIs(targetName, maxWaitMs = 3000) {
-    const start = Date.now();
-    while (Date.now() - start < maxWaitMs) {
-        const current = await getCurrentProfileName();
-        if (current === targetName) return true;
-        await new Promise(r => setTimeout(r, 50));
-    }
-    return false;
-}
-
-// 지정된 프로필로 생성 함수(fn)를 실행하고, 끝나면 원래 프로필로 되돌림
-async function withProfile(profileName, fn) {
-    if (!profileName) return await fn();
-    let prevProfile = "";
-    let needSwitch = false;
-    try {
-        prevProfile = await getCurrentProfileName();
-        needSwitch = !!prevProfile && prevProfile !== profileName;
-    } catch { /* ignore */ }
-
-    try {
-        if (needSwitch) {
-            await execSlash(`/profile ${profileName}`);
-            await waitUntilProfileIs(profileName);
-        }
-        return await fn();
-    } finally {
-        if (needSwitch && prevProfile) {
-            try {
-                await execSlash(`/profile ${prevProfile}`);
-                await waitUntilProfileIs(prevProfile);
-            } catch { /* ignore */ }
-        }
-    }
+    const result = await stConnectionRequest.sendRequest(
+        profileId,
+        prompt,
+        maxTokens ?? undefined,
+        { stream: false, extractData: true, includePreset: true, includeInstruct: true },
+    );
+    const text = typeof result === "string" ? result : result?.content;
+    if (typeof text !== "string") throw new Error("전용 연결 프로필이 빈 응답을 반환했습니다.");
+    return text;
 }
 
 async function generate(instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, onTranslated, userMessage) {
     const s = getSettings();
-    const useBg = s.bgGenerate && typeof stGenerateRaw === "function";
+    const useDedicatedProfile = !!s.profileId;
+    // 전용 프로필은 ST의 전역 생성 상태를 거치지 않는 독립 요청이므로,
+    // generateRaw와 마찬가지로 필요한 컨텍스트를 프롬프트에 직접 넣는다.
+    const useBg = useDedicatedProfile || (s.bgGenerate && typeof stGenerateRaw === "function");
     const fn = stGenerate || window.generateQuietPrompt;
     if (!useBg && typeof fn !== "function") throw new Error("generateQuietPrompt를 찾을 수 없습니다. ST API 연결을 확인해 주세요.");
     const maxTok = s.maxTokens > 0 ? s.maxTokens : null;
@@ -513,19 +478,20 @@ async function generate(instruction, mode, genre, tone, outputLang, person, pers
     // 번역 단계 끝났음을 알려서 로딩 문구를 "AI 대필 중…"으로 바꿀 수 있게 함
     if (typeof onTranslated === "function") onTranslated();
     const prompt = buildPrompt(finalInst, mode, genre, tone, outputLang, person, person3rdName, lengthMode || s.lengthMode, tense || s.tense, userMessage, useBg);
-    return await withProfile(s.profileName, async () => {
-        if (useBg) {
-            // 백그라운드 생성 — 채팅 UI에 생성 중 표시 없음
-            try {
-                // 신버전 ST: 객체 파라미터
-                const r = await stGenerateRaw({ prompt, responseLength: maxTok });
-                if (typeof r === "string") return r;
-            } catch (e) { /* 구버전 시그니처로 재시도 */ }
-            // 구버전 ST: positional (prompt, api, instructOverride, quietToLoud, systemPrompt, responseLength)
-            return await stGenerateRaw(prompt, null, false, false, null, maxTok);
-        }
-        return await fn(prompt, false, false, null, null, maxTok);
-    });
+    if (useDedicatedProfile) {
+        return await requestWithProfile(s.profileId, prompt, maxTok);
+    }
+    if (useBg) {
+        // 백그라운드 생성 — 채팅 UI에 생성 중 표시 없음
+        try {
+            // 신버전 ST: 객체 파라미터
+            const r = await stGenerateRaw({ prompt, responseLength: maxTok });
+            if (typeof r === "string") return r;
+        } catch (e) { /* 구버전 시그니처로 재시도 */ }
+        // 구버전 ST: positional (prompt, api, instructOverride, quietToLoud, systemPrompt, responseLength)
+        return await stGenerateRaw(prompt, null, false, false, null, maxTok);
+    }
+    return await fn(prompt, false, false, null, null, maxTok);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1755,7 +1721,7 @@ function buildPanelHtml() {
                     </label>
                     <span class="dp-hint" style="margin-left:8px;">생성 중 표시 없이 조용히 생성 + 토큰 대폭 절약</span>
                 </div>
-                <div class="dp-hint" style="margin-top:4px;">⚠️ 켜면 ST 기본 주입(전체 히스토리·로어북·시스템 프롬프트)을 우회하고, 캐릭터 설명 + 페르소나 + 직전 8턴만 전송돼. 비용은 크게 줄지만 오래된 맥락·로어북은 반영 안 됨. 끄면 ST가 평소처럼 전부 포함.</div>
+                <div class="dp-hint" style="margin-top:4px;">⚠️ 켜면 ST 기본 주입(전체 히스토리·로어북·시스템 프롬프트)을 우회하고, 캐릭터 설명 + 페르소나 + 직전 8턴만 전송돼. 비용은 크게 줄지만 오래된 맥락·로어북은 반영 안 됨. 끄면 ST가 평소처럼 전부 포함. 단, 아래에서 전용 연결 프로필을 선택한 경우에는 이 토글과 관계없이 독립 요청 방식이 적용돼.</div>
             </div>
 
             <div class="dp-row">
@@ -1828,7 +1794,7 @@ function buildPanelHtml() {
                         <i class="fa-solid fa-rotate"></i>
                     </button>
                 </div>
-                <span class="dp-hint">선택하면 대필 생성할 때만 잠깐 이 프로필로 전환했다가, 끝나면 원래 프로필로 자동 복구돼.</span>
+                <span class="dp-hint">선택한 프로필로 대필 요청만 독립 실행돼. 현재 연결 프로필·프리셋과 화면 상태는 바뀌지 않아.</span>
             </div>
 
         </div>
@@ -1840,31 +1806,40 @@ async function populateProfileSelect(preserveCurrent = true) {
     const sel = document.getElementById("dp-panel-profile");
     if (!sel) return;
     const s = getSettings();
-    const keep = preserveCurrent ? (sel.value || s.profileName) : "";
+    const keep = preserveCurrent ? (sel.value || s.profileId) : "";
 
     sel.innerHTML = `<option value="">현재 활성 프로필 사용</option>`;
     try {
-        const res = await execSlash("/profile-list");
-        console.log("[한마디] /profile-list 원본 응답:", res);
-        if (res == null) {
-            console.warn("[한마디] execSlash가 null을 반환함 — executeSlashCommandsWithOptions를 못 찾았거나 ST 초기화가 안 끝난 상태일 수 있음");
+        if (!stConnectionRequest || typeof stConnectionRequest.getSupportedProfiles !== "function") {
+            throw new Error("ConnectionManagerRequestService를 찾을 수 없음");
         }
-        const names = JSON.parse(res?.pipe ?? "[]");
-        console.log("[한마디] 파싱된 프로필 목록:", names);
-        if (!names.length) {
+        const profiles = stConnectionRequest.getSupportedProfiles();
+        console.log("[한마디] 사용 가능한 전용 프로필:", profiles.map(p => ({ id: p.id, name: p.name })));
+        if (!profiles.length) {
             console.warn("[한마디] 프로필 목록이 비어있음 — ST의 '연결 프로필(Connection Profiles)' 기능이 켜져 있고 프로필이 저장되어 있는지 확인한마디.");
         }
-        for (const n of names) {
-            if (!n) continue;
+        for (const profile of profiles) {
+            if (!profile?.id || !profile?.name) continue;
             const opt = document.createElement("option");
-            opt.value = n;
-            opt.textContent = n;
+            opt.value = profile.id;
+            opt.textContent = profile.name;
             sel.appendChild(opt);
         }
+
+        // v2.1.1까지는 프로필 이름을 저장했으므로 최초 1회 ID로 안전하게 변환
+        let selectedId = keep;
+        if (!selectedId && s.profileName) {
+            selectedId = profiles.find(p => p.name === s.profileName)?.id || "";
+            if (selectedId) {
+                s.profileId = selectedId;
+                s.profileName = "";
+                saveSettings();
+            }
+        }
+        sel.value = selectedId && [...sel.options].some(o => o.value === selectedId) ? selectedId : "";
     } catch (e) {
         console.warn("[한마디] 프로필 목록 조회 실패:", e.message, e);
     }
-    sel.value = keep && [...sel.options].some(o => o.value === keep) ? keep : "";
 }
 
 function injectPanel() {
@@ -2004,9 +1979,15 @@ jQuery(async () => {
         stPowerUser = m.power_user ?? null;
     } catch (e) { stPowerUser = window.power_user ?? null; }
 
+    try {
+        const m = await import("../../shared.js");
+        stConnectionRequest = m.ConnectionManagerRequestService ?? null;
+    } catch (e) { console.warn("[한마디] 전용 연결 프로필 요청 모듈 import 실패:", e.message); }
+
     const stApi = window.SillyTavern?.getContext?.();
     stGenerate  ??= window.generateQuietPrompt  ?? stApi?.generateQuietPrompt ?? null;
     stGenerateRaw ??= window.generateRaw        ?? stApi?.generateRaw ?? null;
+    stConnectionRequest ??= stApi?.ConnectionManagerRequestService ?? null;
     stSave      ??= window.saveSettingsDebounced ?? stApi?.saveSettingsDebounced ?? null;
     stGetCtx    ??= window.getContext            ?? (window.SillyTavern?.getContext?.bind(window.SillyTavern)) ?? null;
     stSettings  ??= window.extension_settings    ?? stApi?.extensionSettings ?? null;
@@ -2028,7 +2009,8 @@ jQuery(async () => {
     $(document)
         .on("change", "#dp-panel-profile", function () {
             const s = getSettings();
-            s.profileName = this.value || "";
+            s.profileId = this.value || "";
+            s.profileName = "";
             saveSettings();
         })
         .on("click", "#dp-panel-profile-refresh", function () {
