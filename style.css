@@ -243,56 +243,6 @@
 #dp-wand:hover, .dp-wand-settings:hover { background: rgba(128,128,128,0.15); }
 
 /* ═══════════════════════════════════════════════════════════════════
-   Info Bar — 채팅창 하단 현재 설정 표시
-   ═══════════════════════════════════════════════════════════════════ */
-
-.dp-infobar {
-    display: none;
-    align-items: center;
-    gap: 6px;
-    padding: 5px 10px;
-    font-size: 0.78rem;
-    color: var(--dp-text);
-    background: var(--dp-surface);
-    border-top: 1px solid var(--dp-border);
-    flex-wrap: wrap;
-    box-sizing: border-box;
-    width: 100%;
-}
-.dp-ib-icon { flex-shrink: 0; }
-.dp-ib-chip {
-    background: var(--dp-accent);
-    color: var(--dp-accent-fg);
-    border-radius: 100px;
-    padding: 1px 9px;
-    font-size: 0.72rem;
-    font-weight: 700;
-    white-space: nowrap;
-}
-.dp-ib-inst {
-    color: var(--dp-sub);
-    font-style: italic;
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.dp-ib-clear {
-    background: none;
-    border: none;
-    color: var(--dp-sub);
-    cursor: pointer;
-    font-size: 0.75rem;
-    padding: 2px 5px;
-    border-radius: 4px;
-    margin-left: auto;
-    flex-shrink: 0;
-    transition: color 0.15s;
-}
-.dp-ib-clear:hover { color: var(--dp-text); }
-
-/* ═══════════════════════════════════════════════════════════════════
    Overlay — 강제 중앙 고정
    <html>에 붙어있으므로 ST body transform 영향 없음
    ═══════════════════════════════════════════════════════════════════ */

@@ -539,8 +539,6 @@ function insertToInput(text, genre, mode, instruction, replace = false) {
         ta.dispatchEvent(new Event("input", { bubbles: true }));
         ta.focus();
     }
-    // 인포바 업데이트
-    updateInfoBar(genre, mode, instruction);
 }
 
 // ── 퀵 모드 전용 토스트 ──
@@ -577,42 +575,6 @@ function hideQuickToast() {
 
 // ★ 모달은 <html>에 붙임 → ST body transform 완전 차단
 function mount(el) { document.documentElement.appendChild(el); }
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  Info Bar (채팅창 하단 - 현재 설정 표시)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function updateInfoBar(genre, mode, instruction) {
-    let bar = document.getElementById("dp-infobar");
-    if (!bar) {
-        bar = document.createElement("div");
-        bar.id = "dp-infobar";
-        bar.className = `dp-infobar ${tc()}`;
-        // send_form 아래에 삽입
-        const sendForm = document.getElementById("send_form");
-        if (sendForm && sendForm.parentNode) {
-            sendForm.parentNode.insertBefore(bar, sendForm.nextSibling);
-        } else {
-            document.body.appendChild(bar);
-        }
-    }
-
-    const modeKR  = { both:"서술+대사", dialogue:"대사만", narration:"서술만" }[mode] || "서술+대사";
-    const instSnip = instruction?.trim() ? `· "${instruction.trim().slice(0, 20)}${instruction.trim().length > 20 ? "…" : ""}"` : "";
-
-    bar.className = `dp-infobar ${tc()}`;
-    bar.innerHTML = `
-<span class="dp-ib-icon">✍️</span>
-<span class="dp-ib-chip">${esc(genre)}</span>
-<span class="dp-ib-chip">${modeKR}</span>
-${instSnip ? `<span class="dp-ib-inst">${esc(instSnip)}</span>` : ""}
-<button class="dp-ib-clear" id="dp-ib-clear" title="인포바 닫기">✕</button>`;
-    bar.style.display = "flex";
-
-    document.getElementById("dp-ib-clear")?.addEventListener("click", () => {
-        bar.style.display = "none";
-    });
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Modals
