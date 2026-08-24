@@ -522,6 +522,7 @@ let sessionHistory = [];
 let generationToken = 0; // 취소 감지용 — 취소 누르면 증가시켜서 진행 중이던 결과를 무시함
 let historyIndex = -1;
 let sessionHistoryChatKey = null;
+let pendingDraftMemory = null;
 
 function getDraftChatKey() {
     const ctx = getCtx();
@@ -575,12 +576,23 @@ function clearDraftFromChatMetadata() {
 function savePendingDraft(payload) {
     try {
         const cached = { ...payload, savedAt: Date.now() };
+        const chatKey = getDraftChatKey();
+
+        // 같은 화면에서 결과창만 닫았다 다시 여는 경우를 위한 가장 즉각적인 메모리 캐시
+        pendingDraftMemory = { chatKey, cached };
+
+        // 확장 설정에도 마지막 미삽입 대필을 백업해 localStorage/메타데이터를 못 읽는 환경까지 대비
+        const settings = getSettings();
+        settings.pendingDraftCache = cached;
+        settings.pendingDraftChatKey = chatKey;
+        settings.pendingDraftCharacter = getCtx().name2 || "";
+        saveSettings();
+
         // ST 공식 채팅 메타데이터에 우선 저장 — 채팅 식별값이 바뀌어도 같은 채팅에서 안정적으로 복원됨
         saveDraftToChatMetadata(cached);
 
         // 브라우저 캐시는 화면 종료 직후 메타데이터 저장이 늦어지는 경우를 위한 즉시 백업
         const map = readDraftCacheMap();
-        const chatKey = getDraftChatKey();
         map[chatKey] = cached;
 
         // 오래된 채팅 캐시부터 정리해서 브라우저 저장공간이 계속 커지지 않게 함
@@ -594,6 +606,11 @@ function savePendingDraft(payload) {
 }
 
 function loadPendingDraft() {
+    const chatKey = getDraftChatKey();
+    if (pendingDraftMemory?.chatKey === chatKey && isValidPendingDraft(pendingDraftMemory.cached)) {
+        return pendingDraftMemory.cached;
+    }
+
     try {
         const fromMetadata = getCtx().chatMetadata?.[CHAT_METADATA_DRAFT_KEY];
         if (isValidPendingDraft(fromMetadata)) return fromMetadata;
@@ -601,12 +618,34 @@ function loadPendingDraft() {
         console.warn("[한마디] 채팅 대필 캐시 읽기 실패:", e);
     }
 
-    const cached = readDraftCacheMap()[getDraftChatKey()];
-    return isValidPendingDraft(cached) ? cached : null;
+    const fromBrowser = readDraftCacheMap()[chatKey];
+    if (isValidPendingDraft(fromBrowser)) return fromBrowser;
+
+    // 마지막 안전망: 한마디 확장 설정의 백업. 같은 채팅이거나 식별값이 없는 동일 캐릭터일 때만 사용.
+    const settings = getSettings();
+    const fromSettings = settings.pendingDraftCache;
+    const storedKey = settings.pendingDraftChatKey || "";
+    const sameCharacter = !!settings.pendingDraftCharacter && settings.pendingDraftCharacter === (getCtx().name2 || "");
+    const keyUnavailable = storedKey.includes("::no-chat") || chatKey.includes("::no-chat");
+    if (isValidPendingDraft(fromSettings) && (storedKey === chatKey || (sameCharacter && keyUnavailable))) {
+        return fromSettings;
+    }
+
+    return null;
 }
 
 function clearPendingDraft() {
+    pendingDraftMemory = null;
     clearDraftFromChatMetadata();
+    try {
+        const settings = getSettings();
+        settings.pendingDraftCache = null;
+        settings.pendingDraftChatKey = "";
+        settings.pendingDraftCharacter = "";
+        saveSettings();
+    } catch (e) {
+        console.warn("[한마디] 설정 대필 캐시 삭제 실패:", e);
+    }
     try {
         const map = readDraftCacheMap();
         delete map[getDraftChatKey()];
@@ -635,13 +674,8 @@ function restorePendingDraft() {
 
 function refreshPendingDraftUi() {
     const hasDraft = !!loadPendingDraft();
-    const row = document.getElementById("dp-panel-draft-row");
+    const row = document.getElementById("dp-sp-draft-row");
     if (row) row.style.display = hasDraft ? "" : "none";
-
-    const wand = document.getElementById("dp-wand");
-    if (wand && !getSettings().quickMode) {
-        wand.title = hasDraft ? "한마디 — 미삽입 대필 다시 열기" : "한마디 — 인풋 대필";
-    }
 }
 
 function pushHistory(entry) {
@@ -1221,6 +1255,8 @@ function showSettingsPopup() {
     rm("dp-settings-popup");
     const s = getSettings();
     const genre = s.genres[s.selectedGenre] ?? s.genres[0];
+    const pendingDraft = loadPendingDraft();
+    const pendingCount = pendingDraft?.type === "multi" ? pendingDraft.results.length : 1;
 
     const mb = (mode, label, cur) =>
         `<button class="dp-mode-btn${cur === mode ? " active" : ""}" data-mode="${mode}">${label}</button>`;
@@ -1237,6 +1273,14 @@ function showSettingsPopup() {
         <button class="dp-close" id="dp-sp-x">✕</button>
     </div>
     <div class="dp-modal-body">
+
+        ${pendingDraft ? `
+        <div class="dp-settings-row" id="dp-sp-draft-row">
+            <label class="dp-settings-label">미삽입 대필</label>
+            <button id="dp-sp-draft-open" class="dp-btn dp-btn-primary" style="width:100%;">
+                <i class="fa-solid fa-clock-rotate-left"></i> 이전 대필 ${pendingCount}개 다시 열기
+            </button>
+        </div>` : ""}
 
         <div class="dp-settings-row">
             <label class="dp-settings-label">프리셋</label>
@@ -1415,6 +1459,16 @@ function showSettingsPopup() {
     </div>
 </div>`;
     mount(el);
+
+    // 인풋 옆 아이콘으로 연 설정 팝업 안에서만 이전 미삽입 결과를 복원
+    el.querySelector("#dp-sp-draft-open")?.addEventListener("click", () => {
+        if (!loadPendingDraft()) {
+            el.querySelector("#dp-sp-draft-row")?.remove();
+            return;
+        }
+        el.remove();
+        restorePendingDraft();
+    });
 
     // 유저 메시지 칸 — 열 때마다 초기화 (가져오기 버튼으로 불러오면 됨)
     const umTa = el.querySelector("#dp-sp-usermsg");
@@ -1796,8 +1850,7 @@ function triggerGenerate() {
     if (s.quickMode) {
         quickGenerate();
     } else {
-        // 아직 인풋에 넣지 않은 결과가 있으면 새 생성보다 먼저 그대로 복원
-        if (!restorePendingDraft()) showSettingsPopup();
+        showSettingsPopup();
     }
 }
 
@@ -1927,12 +1980,6 @@ function buildPanelHtml() {
                 </div>
             </div>
 
-            <div class="dp-row" id="dp-panel-draft-row" style="display:none;">
-                <button id="dp-panel-draft-open" class="dp-btn dp-btn-primary" style="width:100%;">
-                    <i class="fa-solid fa-clock-rotate-left"></i> 미삽입 대필 다시 열기
-                </button>
-            </div>
-
             <div class="dp-row">
                 <button id="dp-panel-promptview" class="dp-btn" style="width:100%;"><i class="fa-solid fa-file-lines"></i> 주입 프롬프트 보기</button>
             </div>
@@ -2028,15 +2075,6 @@ function injectPanel() {
     // 주입 프롬프트 보기
     document.getElementById("dp-panel-promptview")?.addEventListener("click", showPromptViewer);
 
-    // 캐시 복원이 필요한 경우 확장 설정 안에서도 직접 열 수 있게 함
-    document.getElementById("dp-panel-draft-open")?.addEventListener("click", () => {
-        if (!restorePendingDraft()) {
-            refreshPendingDraftUi();
-            showError("현재 채팅에 저장된 미삽입 대필이 없습니다.");
-        }
-    });
-    refreshPendingDraftUi();
-
     // 아이콘 커스터마이즈
     const s = getSettings();
     function setupPicker(containerId, settingKey, onApply) {
@@ -2074,7 +2112,7 @@ function injectWand() {
     btn.addEventListener("click", triggerGenerate);
     for (const sel of ["#leftSendForm","#extensionsSendButton","#send_form","#rightSendForm"]) {
         const el = document.querySelector(sel);
-        if (el) { el.appendChild(btn); wandDone = true; console.log(`[한마디] ✅ 완드 버튼 → ${sel}`); updateWandMode(); refreshPendingDraftUi(); return; }
+        if (el) { el.appendChild(btn); wandDone = true; console.log(`[한마디] ✅ 완드 버튼 → ${sel}`); updateWandMode(); return; }
     }
 }
 
