@@ -511,14 +511,90 @@ async function translateText(text, targetLangLabel, maxTokens) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Generation History (세션 중에만 유지 — 새로고침 시 초기화)
+//  Pending Draft Cache + Generation History
 // ─────────────────────────────────────────────────────────────────────────────
+
+const DRAFT_CACHE_KEY = "hanmadi:pending-drafts:v1";
+const MAX_CACHED_CHATS = 20;
 
 let sessionHistory = [];
 let generationToken = 0; // 취소 감지용 — 취소 누르면 증가시켜서 진행 중이던 결과를 무시함
 let historyIndex = -1;
+let sessionHistoryChatKey = null;
+
+function getDraftChatKey() {
+    const ctx = getCtx();
+    const chatId = ctx.chatId ?? ctx.chat_id ?? "no-chat";
+    const ownerId = ctx.groupId ?? ctx.group_id ?? ctx.characterId ?? window.this_chid ?? ctx.name2 ?? "unknown";
+    return `${String(ownerId)}::${String(chatId)}`;
+}
+
+function readDraftCacheMap() {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(DRAFT_CACHE_KEY) || "{}");
+        return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch (e) {
+        console.warn("[한마디] 대필 캐시 읽기 실패:", e);
+        return {};
+    }
+}
+
+function savePendingDraft(payload) {
+    try {
+        const map = readDraftCacheMap();
+        const chatKey = getDraftChatKey();
+        map[chatKey] = { ...payload, savedAt: Date.now() };
+
+        // 오래된 채팅 캐시부터 정리해서 브라우저 저장공간이 계속 커지지 않게 함
+        const entries = Object.entries(map).sort((a, b) => (b[1]?.savedAt || 0) - (a[1]?.savedAt || 0));
+        const trimmed = Object.fromEntries(entries.slice(0, MAX_CACHED_CHATS));
+        localStorage.setItem(DRAFT_CACHE_KEY, JSON.stringify(trimmed));
+    } catch (e) {
+        console.warn("[한마디] 대필 캐시 저장 실패:", e);
+    }
+}
+
+function loadPendingDraft() {
+    const cached = readDraftCacheMap()[getDraftChatKey()];
+    if (!cached || !["single", "multi"].includes(cached.type)) return null;
+    if (cached.type === "single" && typeof cached.entry?.result !== "string") return null;
+    if (cached.type === "multi" && (!Array.isArray(cached.results) || !cached.results.length || !cached.baseEntry)) return null;
+    return cached;
+}
+
+function clearPendingDraft() {
+    try {
+        const map = readDraftCacheMap();
+        delete map[getDraftChatKey()];
+        if (Object.keys(map).length) localStorage.setItem(DRAFT_CACHE_KEY, JSON.stringify(map));
+        else localStorage.removeItem(DRAFT_CACHE_KEY);
+    } catch (e) {
+        console.warn("[한마디] 대필 캐시 삭제 실패:", e);
+    }
+}
+
+function restorePendingDraft() {
+    const cached = loadPendingDraft();
+    if (!cached) return false;
+
+    if (cached.type === "multi") {
+        showMultiResult([...cached.results], { ...cached.baseEntry });
+    } else {
+        sessionHistory = [{ ...cached.entry }];
+        historyIndex = 0;
+        sessionHistoryChatKey = getDraftChatKey();
+        showResult(sessionHistory[0]);
+    }
+    return true;
+}
 
 function pushHistory(entry) {
+    const chatKey = getDraftChatKey();
+    if (sessionHistoryChatKey !== chatKey) {
+        sessionHistory = [];
+        historyIndex = -1;
+        sessionHistoryChatKey = chatKey;
+    }
     sessionHistory.push(entry);
     historyIndex = sessionHistory.length - 1;
 }
@@ -675,6 +751,7 @@ function showResult(entry, onBack) {
         <button id="dp-regen"  class="dp-btn"><i class="fa-solid fa-rotate"></i> 재생성</button>
         <button id="dp-modify-toggle" class="dp-btn"><i class="fa-solid fa-pen"></i> 수정 재생성</button>
         <button id="dp-translate" class="dp-btn"><i class="fa-solid fa-language"></i> 번역</button>
+        <button id="dp-new" class="dp-btn"><i class="fa-solid fa-plus"></i> 새 대필</button>
     </div>
     <div id="dp-modify-box" class="dp-modify-box" style="display:none">
         <textarea id="dp-modify-inp" class="dp-textarea" rows="2" placeholder="수정 지시 입력… (예: 더 짧게, 귀엽게, 슬프게)"></textarea>
@@ -683,7 +760,19 @@ function showResult(entry, onBack) {
 </div>`;
     mount(el);
 
+    // 단일 결과는 현재 채팅의 "미삽입 대필"로 보관한다.
+    // 3개 결과 중 하나를 자세히 연 경우(onBack 있음)에는 원래 3개 캐시를 유지한다.
+    if (typeof onBack !== "function") savePendingDraft({ type: "single", entry });
+
+    const resultTextarea = el.querySelector("#dp-res-text");
+    const persistResultEdit = () => {
+        entry.result = resultTextarea.value;
+        if (typeof onBack !== "function") savePendingDraft({ type: "single", entry });
+    };
+    resultTextarea.addEventListener("input", persistResultEdit);
+
     el.querySelector("#dp-res-x").addEventListener("click", () => {
+        persistResultEdit();
         el.remove();
         if (typeof onBack === "function") onBack();
     });
@@ -692,8 +781,16 @@ function showResult(entry, onBack) {
         const aiText = el.querySelector("#dp-res-text").value;
         const combined = hasUM ? `${userMessage.trim()}\n${aiText}` : aiText;
         insertToInput(combined, genre, mode, instruction, hasUM);
+        clearPendingDraft();
         el.remove();
         rm("dp-multi-result");
+    });
+
+    el.querySelector("#dp-new").addEventListener("click", () => {
+        clearPendingDraft();
+        el.remove();
+        rm("dp-multi-result");
+        showSettingsPopup();
     });
 
     el.querySelector("#dp-regen").addEventListener("click", async () => {
@@ -777,6 +874,7 @@ function showResult(entry, onBack) {
             const tTokens = getSettings().translateMaxTokens;
             const translated = await translateText(el.querySelector("#dp-res-text").value, targetLabel, tTokens);
             entry.translation = translated;
+            if (typeof onBack !== "function") savePendingDraft({ type: "single", entry });
             translationText.value = translated;
             translationBox.style.display = "flex";
             translateBtn.innerHTML = '<i class="fa-solid fa-eye-slash"></i> 번역 숨기기';
@@ -793,8 +891,14 @@ function showResult(entry, onBack) {
         const transText = translationText.value;
         const combined = hasUM ? `${userMessage.trim()}\n${transText}` : transText;
         insertToInput(combined, genre, mode, instruction, hasUM);
+        clearPendingDraft();
         el.remove();
         rm("dp-multi-result");
+    });
+
+    translationText.addEventListener("input", () => {
+        entry.translation = translationText.value;
+        if (typeof onBack !== "function") savePendingDraft({ type: "single", entry });
     });
 }
 
@@ -969,11 +1073,27 @@ function showMultiResult(results, baseEntry) {
     </div>
     <div class="dp-action-bar">
         <button id="dp-mr-regen-all" class="dp-btn"><i class="fa-solid fa-rotate"></i> ${results.length}개 다시 생성</button>
+        <button id="dp-mr-new" class="dp-btn"><i class="fa-solid fa-plus"></i> 새 대필</button>
     </div>
 </div>`;
     mount(el);
 
-    el.querySelector("#dp-mr-x").addEventListener("click", () => el.remove());
+    const persistMulti = () => savePendingDraft({ type: "multi", results, baseEntry });
+    persistMulti();
+
+    el.querySelector("#dp-mr-x").addEventListener("click", () => {
+        el.querySelectorAll(".dp-multi-textarea").forEach((ta, i) => { results[i] = ta.value; });
+        persistMulti();
+        el.remove();
+    });
+
+    el.querySelectorAll(".dp-multi-textarea").forEach(ta => {
+        ta.addEventListener("input", () => {
+            const i = parseInt(ta.dataset.i);
+            results[i] = ta.value;
+            persistMulti();
+        });
+    });
 
     el.querySelectorAll(".dp-multi-insert").forEach(btn => {
         btn.addEventListener("click", () => {
@@ -981,6 +1101,7 @@ function showMultiResult(results, baseEntry) {
             const text = el.querySelector(`.dp-multi-textarea[data-i="${i}"]`).value;
             const combined = hasUM ? `${userMessage.trim()}\n${text}` : text;
             insertToInput(combined, genre, mode, instruction, hasUM);
+            clearPendingDraft();
             el.remove();
         });
     });
@@ -999,6 +1120,7 @@ function showMultiResult(results, baseEntry) {
                 ta.value = r;
                 countEl.textContent = `${r.trim().length}자`;
                 results[i] = r;
+                persistMulti();
             } catch (e) {
                 showError(e.message || "재생성 실패");
             } finally {
@@ -1025,6 +1147,12 @@ function showMultiResult(results, baseEntry) {
     el.querySelector("#dp-mr-regen-all").addEventListener("click", async () => {
         el.remove();
         await runGenerateMulti(results.length, instruction, mode, genre, null, tone, outputLang, person, person3rdName, lengthMode, tense, userMessage);
+    });
+
+    el.querySelector("#dp-mr-new").addEventListener("click", () => {
+        clearPendingDraft();
+        el.remove();
+        showSettingsPopup();
     });
 }
 
@@ -1612,7 +1740,8 @@ function triggerGenerate() {
     if (s.quickMode) {
         quickGenerate();
     } else {
-        showSettingsPopup();
+        // 아직 인풋에 넣지 않은 결과가 있으면 새 생성보다 먼저 그대로 복원
+        if (!restorePendingDraft()) showSettingsPopup();
     }
 }
 
