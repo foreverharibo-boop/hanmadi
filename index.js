@@ -515,6 +515,7 @@ async function translateText(text, targetLangLabel, maxTokens) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const DRAFT_CACHE_KEY = "hanmadi:pending-drafts:v1";
+const CHAT_METADATA_DRAFT_KEY = "hanmadi_pending_draft_v1";
 const MAX_CACHED_CHATS = 20;
 
 let sessionHistory = [];
@@ -539,11 +540,48 @@ function readDraftCacheMap() {
     }
 }
 
+function isValidPendingDraft(cached) {
+    if (!cached || !["single", "multi"].includes(cached.type)) return false;
+    if (cached.type === "single") return typeof cached.entry?.result === "string";
+    return Array.isArray(cached.results) && cached.results.length > 0 && !!cached.baseEntry;
+}
+
+function saveDraftToChatMetadata(cached) {
+    try {
+        const ctx = getCtx();
+        if (!ctx.chatMetadata || typeof ctx.chatMetadata !== "object") return;
+        ctx.chatMetadata[CHAT_METADATA_DRAFT_KEY] = cached;
+        if (typeof ctx.saveMetadata === "function") {
+            Promise.resolve(ctx.saveMetadata()).catch(e => console.warn("[한마디] 채팅 대필 캐시 저장 실패:", e));
+        }
+    } catch (e) {
+        console.warn("[한마디] 채팅 대필 캐시 저장 실패:", e);
+    }
+}
+
+function clearDraftFromChatMetadata() {
+    try {
+        const ctx = getCtx();
+        if (!ctx.chatMetadata || typeof ctx.chatMetadata !== "object") return;
+        delete ctx.chatMetadata[CHAT_METADATA_DRAFT_KEY];
+        if (typeof ctx.saveMetadata === "function") {
+            Promise.resolve(ctx.saveMetadata()).catch(e => console.warn("[한마디] 채팅 대필 캐시 삭제 실패:", e));
+        }
+    } catch (e) {
+        console.warn("[한마디] 채팅 대필 캐시 삭제 실패:", e);
+    }
+}
+
 function savePendingDraft(payload) {
     try {
+        const cached = { ...payload, savedAt: Date.now() };
+        // ST 공식 채팅 메타데이터에 우선 저장 — 채팅 식별값이 바뀌어도 같은 채팅에서 안정적으로 복원됨
+        saveDraftToChatMetadata(cached);
+
+        // 브라우저 캐시는 화면 종료 직후 메타데이터 저장이 늦어지는 경우를 위한 즉시 백업
         const map = readDraftCacheMap();
         const chatKey = getDraftChatKey();
-        map[chatKey] = { ...payload, savedAt: Date.now() };
+        map[chatKey] = cached;
 
         // 오래된 채팅 캐시부터 정리해서 브라우저 저장공간이 계속 커지지 않게 함
         const entries = Object.entries(map).sort((a, b) => (b[1]?.savedAt || 0) - (a[1]?.savedAt || 0));
@@ -552,17 +590,23 @@ function savePendingDraft(payload) {
     } catch (e) {
         console.warn("[한마디] 대필 캐시 저장 실패:", e);
     }
+    refreshPendingDraftUi();
 }
 
 function loadPendingDraft() {
+    try {
+        const fromMetadata = getCtx().chatMetadata?.[CHAT_METADATA_DRAFT_KEY];
+        if (isValidPendingDraft(fromMetadata)) return fromMetadata;
+    } catch (e) {
+        console.warn("[한마디] 채팅 대필 캐시 읽기 실패:", e);
+    }
+
     const cached = readDraftCacheMap()[getDraftChatKey()];
-    if (!cached || !["single", "multi"].includes(cached.type)) return null;
-    if (cached.type === "single" && typeof cached.entry?.result !== "string") return null;
-    if (cached.type === "multi" && (!Array.isArray(cached.results) || !cached.results.length || !cached.baseEntry)) return null;
-    return cached;
+    return isValidPendingDraft(cached) ? cached : null;
 }
 
 function clearPendingDraft() {
+    clearDraftFromChatMetadata();
     try {
         const map = readDraftCacheMap();
         delete map[getDraftChatKey()];
@@ -571,6 +615,7 @@ function clearPendingDraft() {
     } catch (e) {
         console.warn("[한마디] 대필 캐시 삭제 실패:", e);
     }
+    refreshPendingDraftUi();
 }
 
 function restorePendingDraft() {
@@ -586,6 +631,17 @@ function restorePendingDraft() {
         showResult(sessionHistory[0]);
     }
     return true;
+}
+
+function refreshPendingDraftUi() {
+    const hasDraft = !!loadPendingDraft();
+    const row = document.getElementById("dp-panel-draft-row");
+    if (row) row.style.display = hasDraft ? "" : "none";
+
+    const wand = document.getElementById("dp-wand");
+    if (wand && !getSettings().quickMode) {
+        wand.title = hasDraft ? "한마디 — 미삽입 대필 다시 열기" : "한마디 — 인풋 대필";
+    }
 }
 
 function pushHistory(entry) {
@@ -1871,6 +1927,12 @@ function buildPanelHtml() {
                 </div>
             </div>
 
+            <div class="dp-row" id="dp-panel-draft-row" style="display:none;">
+                <button id="dp-panel-draft-open" class="dp-btn dp-btn-primary" style="width:100%;">
+                    <i class="fa-solid fa-clock-rotate-left"></i> 미삽입 대필 다시 열기
+                </button>
+            </div>
+
             <div class="dp-row">
                 <button id="dp-panel-promptview" class="dp-btn" style="width:100%;"><i class="fa-solid fa-file-lines"></i> 주입 프롬프트 보기</button>
             </div>
@@ -1966,6 +2028,15 @@ function injectPanel() {
     // 주입 프롬프트 보기
     document.getElementById("dp-panel-promptview")?.addEventListener("click", showPromptViewer);
 
+    // 캐시 복원이 필요한 경우 확장 설정 안에서도 직접 열 수 있게 함
+    document.getElementById("dp-panel-draft-open")?.addEventListener("click", () => {
+        if (!restorePendingDraft()) {
+            refreshPendingDraftUi();
+            showError("현재 채팅에 저장된 미삽입 대필이 없습니다.");
+        }
+    });
+    refreshPendingDraftUi();
+
     // 아이콘 커스터마이즈
     const s = getSettings();
     function setupPicker(containerId, settingKey, onApply) {
@@ -2003,7 +2074,7 @@ function injectWand() {
     btn.addEventListener("click", triggerGenerate);
     for (const sel of ["#leftSendForm","#extensionsSendButton","#send_form","#rightSendForm"]) {
         const el = document.querySelector(sel);
-        if (el) { el.appendChild(btn); wandDone = true; console.log(`[한마디] ✅ 완드 버튼 → ${sel}`); updateWandMode(); return; }
+        if (el) { el.appendChild(btn); wandDone = true; console.log(`[한마디] ✅ 완드 버튼 → ${sel}`); updateWandMode(); refreshPendingDraftUi(); return; }
     }
 }
 
