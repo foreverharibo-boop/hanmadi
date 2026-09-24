@@ -24,7 +24,6 @@ function renderIconHtml(iconKey, colorKey) {
     return `<i class="fa-solid ${iconKey}" style="${style}"></i>`;
 }
 
-let stGenerate  = null;
 let stGenerateRaw = null;
 let stConnectionRequest = null;
 let stSave      = null;
@@ -77,7 +76,6 @@ function getSettings() {
     if (typeof s.autoSaveInstruction !== "boolean") s.autoSaveInstruction = true;
     if (s.lastUserMessage == null) s.lastUserMessage = "";
     if (s.quickMode !== true) s.quickMode = false;
-    if (s.bgGenerate !== true) s.bgGenerate = false;
     if (s.penIcon == null) s.penIcon = "fa-pen-nib";
     if (s.penColor == null) s.penColor = "rainbow";
     if (s.settingsIcon == null) s.settingsIcon = "fa-palette";
@@ -277,11 +275,9 @@ function lengthSentence(mode) {
 
 // 지시사항 한→영 자동 번역 (autoTranslateInst 켜져 있을 때)
 async function translateInstruction(text) {
-    const fn = stGenerate || window.generateQuietPrompt;
-    if (typeof fn !== "function") return text;
     const prompt = `Translate the following instruction into natural English. Output ONLY the translated instruction, no explanation or quotes.\n\n${text}`;
     try {
-        const out = await fn(prompt, false, false, null, null, 300);
+        const out = await requestStandalone(prompt, 300);
         return out.trim() || text;
     } catch { return text; }
 }
@@ -289,10 +285,8 @@ async function translateInstruction(text) {
 // 마지막으로 조립된 프롬프트 (패널의 "주입 프롬프트 보기"용)
 let lastBuiltPrompt = null;
 
-function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, userMessage, bgMode, bgMessageCount = 8) {
-    // ★ 채팅 히스토리는 ST가 generateQuietPrompt 호출 시 자동으로 컨텍스트에 포함시킴
-    //   → 여기서 getRecentMsgs로 다시 넣으면 같은 대화가 중복 주입되므로 넣지 않음
-    //   단, bgMode(generateRaw)일 때는 ST가 아무것도 안 넣어주므로 캐릭터 설명 + 긴 히스토리를 직접 주입
+function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, userMessage, bgMessageCount = 8) {
+    // 대필 요청은 항상 독립 요청으로 보내므로 필요한 캐릭터 설명과 최근 대화를 직접 주입한다.
     const ctx    = getCtx();
     const user   = ctx.name1 || "User";
     const char   = ctx.name2 || "Character";
@@ -314,12 +308,9 @@ function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3
     p += `You must now write the next message on behalf of ${user} (the user). Write from ${user}'s perspective, NOT the character's perspective.\n\n`;
     p += `Genre: ${genre}\nFormat: ${modeLbl}\nPerson: ${personLbl}\nTense: ${tenseLbl}\n\n`;
     if (persona) p += `## User Persona\n${persona}\n\n`;
-    if (bgMode) {
-        // generateRaw는 캐릭터 카드가 자동 포함되지 않으므로 직접 주입
-        const charObj = ctx.characters?.[ctx.characterId];
-        const charDesc = charObj?.description?.trim();
-        if (charDesc) p += `## Counterpart Character (${char}) Description\n${charDesc}\n\n`;
-    }
+    const charObj = ctx.characters?.[ctx.characterId];
+    const charDesc = charObj?.description?.trim();
+    if (charDesc) p += `## Counterpart Character (${char}) Description\n${charDesc}\n\n`;
     if (userSamples.length) {
         p += `## Style Reference (messages ${user} actually wrote — reference the FORMAT/STYLE only, not the content)\n`;
         p += userSamples.map((s,i) => `Example ${i+1}: ${s}`).join("\n") + "\n\n";
@@ -356,7 +347,7 @@ function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3
     // ★ 프롬프트 맨 끝은 모델이 가장 주의 깊게 보는 위치라서, "직전 상황 이어쓰기"랑
     //   "분량 제한"을 따로 두 번 강조하면 서로 경쟁하게 됨 → 하나로 합쳐서 한 번만 마무리
     const manualContextCount = Math.max(1, Math.min(100, parseInt(bgMessageCount, 10) || 8));
-    const lastTurns = getLastTurns(bgMode ? manualContextCount : 3);
+    const lastTurns = getLastTurns(manualContextCount);
     const lm = lengthMode || "normal";
     const needsStrictLength = lm === "short" || /^custom:\d+$/.test(lm);
 
@@ -396,10 +387,10 @@ function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3
         : `## Output Language\nWrite only in Korean (한국어). The instructions above are in English, but your entire output must be in Korean.`;
 
     // ★ 디버그 로그 — 실제로 주입되는 프롬프트 전문을 콘솔에서 확인 가능
-    console.groupCollapsed(`[한마디] 📋 대필 프롬프트 (${p.length}자, bgMode=${!!bgMode})`);
+    console.groupCollapsed(`[한마디] 📋 대필 전용 프롬프트 (${p.length}자)`);
     console.log(p);
     console.groupEnd();
-    lastBuiltPrompt = { text: p, time: new Date(), bgMode: !!bgMode };
+    lastBuiltPrompt = { text: p, time: new Date() };
 
     return p;
 }
@@ -412,7 +403,7 @@ function showPromptViewer(openEvent) {
     el.id = "dp-prompt-viewer";
     el.className = "dp-pv-overlay";
     const info = lastBuiltPrompt
-        ? `${lastBuiltPrompt.time.toLocaleTimeString()} 생성 · ${lastBuiltPrompt.text.length}자 · ${lastBuiltPrompt.bgMode ? "백그라운드 모드" : "일반 모드"}`
+        ? `${lastBuiltPrompt.time.toLocaleTimeString()} 생성 · ${lastBuiltPrompt.text.length}자 · 대필 전용 요청`
         : "";
     const body = lastBuiltPrompt
         ? lastBuiltPrompt.text
@@ -428,7 +419,7 @@ function showPromptViewer(openEvent) {
         <div class="dp-pv-footer">
             <button class="dp-pv-copy" id="dp-pv-copy"><i class="fa-solid fa-copy"></i> 복사</button>
         </div>
-        <div class="dp-pv-note">※ 백그라운드 모드가 꺼져 있으면 이 프롬프트 외에 ST가 캐릭터 카드·로어북·채팅 히스토리를 자동으로 추가합니다.</div>
+        <div class="dp-pv-note">※ 한마디는 항상 대필에 필요한 캐릭터 설명·페르소나·최근 메시지만 직접 전송합니다. 전체 채팅·로어북·시스템 프롬프트·프리셋 지침은 추가하지 않습니다.</div>
     </div>`;
     mount(el);
     // ST의 확장 패널 바깥 클릭 감지기로 이벤트가 전달되면 확장 탭까지 닫힐 수 있으므로
@@ -473,21 +464,30 @@ async function requestWithProfile(profileId, prompt, maxTokens) {
         profileId,
         prompt,
         maxTokens ?? undefined,
-        { stream: false, extractData: true, includePreset: true, includeInstruct: true },
+        { stream: false, extractData: true, includePreset: false, includeInstruct: false },
     );
     const text = typeof result === "string" ? result : result?.content;
     if (typeof text !== "string") throw new Error("전용 연결 프로필이 빈 응답을 반환했습니다.");
     return text;
 }
 
+// 전체 ST 컨텍스트를 붙이지 않는 독립 요청. 전용 프로필이 있으면 그 프로필을 사용하고,
+// 없으면 현재 연결의 generateRaw를 사용한다.
+async function requestStandalone(prompt, maxTokens) {
+    const s = getSettings();
+    if (s.profileId) return await requestWithProfile(s.profileId, prompt, maxTokens);
+    if (typeof stGenerateRaw !== "function") {
+        throw new Error("독립 생성 API(generateRaw)를 찾을 수 없습니다. SillyTavern 1.18 이상인지 확인해 주세요.");
+    }
+    try {
+        const result = await stGenerateRaw({ prompt, responseLength: maxTokens });
+        if (typeof result === "string") return result;
+    } catch (e) { /* 구버전 시그니처로 재시도 */ }
+    return await stGenerateRaw(prompt, null, false, false, null, maxTokens);
+}
+
 async function generate(instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, onTranslated, userMessage) {
     const s = getSettings();
-    const useDedicatedProfile = !!s.profileId;
-    // 전용 프로필은 ST의 전역 생성 상태를 거치지 않는 독립 요청이므로,
-    // generateRaw와 마찬가지로 필요한 컨텍스트를 프롬프트에 직접 넣는다.
-    const useBg = useDedicatedProfile || (s.bgGenerate && typeof stGenerateRaw === "function");
-    const fn = stGenerate || window.generateQuietPrompt;
-    if (!useBg && typeof fn !== "function") throw new Error("generateQuietPrompt를 찾을 수 없습니다. ST API 연결을 확인해 주세요.");
     const maxTok = s.maxTokens > 0 ? s.maxTokens : null;
     // 지시사항 자동 번역 (켜져 있고 내용이 한국어인 경우)
     let finalInst = instruction;
@@ -496,36 +496,20 @@ async function generate(instruction, mode, genre, tone, outputLang, person, pers
     }
     // 번역 단계 끝났음을 알려서 로딩 문구를 "AI 대필 중…"으로 바꿀 수 있게 함
     if (typeof onTranslated === "function") onTranslated();
-    const prompt = buildPrompt(finalInst, mode, genre, tone, outputLang, person, person3rdName, lengthMode || s.lengthMode, tense || s.tense, userMessage, useBg, s.bgMessageCount);
-    if (useDedicatedProfile) {
-        return await requestWithProfile(s.profileId, prompt, maxTok);
-    }
-    if (useBg) {
-        // 백그라운드 생성 — 채팅 UI에 생성 중 표시 없음
-        try {
-            // 신버전 ST: 객체 파라미터
-            const r = await stGenerateRaw({ prompt, responseLength: maxTok });
-            if (typeof r === "string") return r;
-        } catch (e) { /* 구버전 시그니처로 재시도 */ }
-        // 구버전 ST: positional (prompt, api, instructOverride, quietToLoud, systemPrompt, responseLength)
-        return await stGenerateRaw(prompt, null, false, false, null, maxTok);
-    }
-    return await fn(prompt, false, false, null, null, maxTok);
+    const prompt = buildPrompt(finalInst, mode, genre, tone, outputLang, person, person3rdName, lengthMode || s.lengthMode, tense || s.tense, userMessage, s.bgMessageCount);
+    return await requestStandalone(prompt, maxTok);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Translation
 //  참고: ST에 Cat-translator 등 전용 번역 확장을 쓰고 있다면 여기에 연동 지점을
-//  추가할 수 있음. 우선은 별도 확장에 의존하지 않도록 현재 연결된 ST API
-//  (generateQuietPrompt)로 직접 번역을 요청하는 독립적인 방식으로 구현.
+//  추가할 수 있음. 대필과 마찬가지로 전체 ST 컨텍스트가 붙지 않는 독립 요청을 사용.
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function translateText(text, targetLangLabel, maxTokens) {
-    const fn = stGenerate || window.generateQuietPrompt;
-    if (typeof fn !== "function") throw new Error("generateQuietPrompt를 찾을 수 없습니다. ST API 연결을 확인해 주세요.");
     const prompt = `다음 텍스트를 자연스러운 ${targetLangLabel}로 번역하세요. 설명이나 추가 코멘트 없이 번역 결과만 출력하세요.\n\n---\n${text}\n---`;
     const budget = !maxTokens || maxTokens <= 0 ? null : maxTokens;
-    const out = await fn(prompt, false, false, null, null, budget);
+    const out = await requestStandalone(prompt, budget);
     return out.trim();
 }
 
@@ -1436,7 +1420,13 @@ function showSettingsPopup() {
         </div>
 
         <div class="dp-settings-row">
-            <label class="dp-settings-label">지시사항 <span class="dp-settings-hint">(선택 — 비워두면 AI 자동 분석 · 자동 임시저장됨)</span></label>
+            <div class="dp-inst-label-row">
+                <label class="dp-settings-label" for="dp-sp-inst">지시사항</label>
+                <label class="dp-inst-save-check" for="dp-sp-inst-save">
+                    <input id="dp-sp-inst-save" type="checkbox"${s.autoSaveInstruction ? " checked" : ""}>
+                    <span>저장</span>
+                </label>
+            </div>
             <textarea id="dp-sp-inst" class="dp-textarea" rows="3"
                 placeholder="예: 수줍게 고백하는 느낌으로, 장난스럽게, 짧게 한 줄만…"></textarea>
         </div>
@@ -1506,6 +1496,13 @@ function showSettingsPopup() {
     instTa.addEventListener("input", function () {
         if (!s.autoSaveInstruction) return;
         s.lastInstruction = this.value;
+        saveSettings();
+    });
+
+    // 지시사항 옆의 작은 저장 체크박스
+    el.querySelector("#dp-sp-inst-save").addEventListener("change", function () {
+        s.autoSaveInstruction = this.checked;
+        if (this.checked) s.lastInstruction = instTa.value;
         saveSettings();
     });
 
@@ -1941,31 +1938,12 @@ function buildPanelHtml() {
             </div>
 
             <div class="dp-row">
-                <label class="dp-label">백그라운드 생성</label>
-                <div class="dp-genre-row">
-                    <label class="dp-toggle" title="켜면 채팅 화면에 생성 중 표시 없이 조용히 생성">
-                        <input type="checkbox" id="dp-panel-bggen">
-                        <span class="dp-toggle-slider"></span>
-                    </label>
-                    <span class="dp-hint" style="margin-left:8px;">생성 중 표시 없이 조용히 생성 + 토큰 대폭 절약</span>
-                </div>
+                <label class="dp-label">AI에게 보낼 최근 메시지</label>
                 <div class="dp-bg-count-row">
-                    <label for="dp-panel-bgcount">최근 메시지</label>
                     <input id="dp-panel-bgcount" type="number" class="dp-input dp-bg-count-input" min="1" max="100" step="1" value="${s.bgMessageCount}">
-                    <span>개 전송</span>
+                    <span>개</span>
                 </div>
-                <div class="dp-hint" style="margin-top:4px;">⚠️ 켜면 ST 기본 주입(전체 히스토리·로어북·시스템 프롬프트)을 우회하고, 캐릭터 설명 + 페르소나 + 위에서 지정한 최근 메시지만 전송돼. 비용은 크게 줄지만 오래된 맥락·로어북은 반영 안 됨. 끄면 ST가 평소처럼 전부 포함. 단, 아래에서 전용 연결 프로필을 선택한 경우에는 이 토글과 관계없이 독립 요청 방식이 적용돼.</div>
-            </div>
-
-            <div class="dp-row">
-                <label class="dp-label">지시사항 자동 저장</label>
-                <div class="dp-genre-row">
-                    <label class="dp-toggle" title="켜면 대필 설정의 지시사항을 다음에도 불러옴">
-                        <input type="checkbox" id="dp-panel-autosave-inst">
-                        <span class="dp-toggle-slider"></span>
-                    </label>
-                    <span class="dp-hint" style="margin-left:8px;">끄면 지시사항을 저장하지 않고, 설정 팝업을 열 때 빈칸으로 시작</span>
-                </div>
+                <div class="dp-hint" style="margin-top:4px;">한마디는 항상 캐릭터 설명 + 페르소나 + 지정한 최근 메시지만 전송해. 전체 히스토리·로어북·시스템 프롬프트·프리셋 지침은 보내지 않아.</div>
             </div>
 
             <div class="dp-row">
@@ -2105,18 +2083,7 @@ function injectPanel() {
         });
     }
 
-    // 백그라운드 생성 토글
-    const bgToggle = document.getElementById("dp-panel-bggen");
-    if (bgToggle) {
-        const s0 = getSettings();
-        bgToggle.checked = s0.bgGenerate;
-        bgToggle.addEventListener("change", () => {
-            s0.bgGenerate = bgToggle.checked;
-            saveSettings();
-        });
-    }
-
-    // 백그라운드/전용 프로필 요청에 직접 넣을 최근 메시지 수
+    // 대필 전용 요청에 직접 넣을 최근 메시지 수
     const bgCountInput = document.getElementById("dp-panel-bgcount");
     if (bgCountInput) {
         const s0 = getSettings();
@@ -2128,17 +2095,6 @@ function injectPanel() {
         };
         bgCountInput.addEventListener("change", saveBgCount);
         bgCountInput.addEventListener("blur", saveBgCount);
-    }
-
-    // 지시사항 자동 저장 토글
-    const autoSaveInstToggle = document.getElementById("dp-panel-autosave-inst");
-    if (autoSaveInstToggle) {
-        const s0 = getSettings();
-        autoSaveInstToggle.checked = s0.autoSaveInstruction;
-        autoSaveInstToggle.addEventListener("change", () => {
-            s0.autoSaveInstruction = autoSaveInstToggle.checked;
-            saveSettings();
-        });
     }
 
     // 주입 프롬프트 보기
@@ -2232,7 +2188,6 @@ jQuery(async () => {
 
     try {
         const m = await import("../../../../script.js");
-        stGenerate = m.generateQuietPrompt ?? null;
         stGenerateRaw = m.generateRaw ?? null;
         stSave     = m.saveSettingsDebounced ?? null;
         stGetCtx   = m.getContext ?? null;
@@ -2254,7 +2209,6 @@ jQuery(async () => {
     } catch (e) { console.warn("[한마디] 전용 연결 프로필 요청 모듈 import 실패:", e.message); }
 
     const stApi = window.SillyTavern?.getContext?.();
-    stGenerate  ??= window.generateQuietPrompt  ?? stApi?.generateQuietPrompt ?? null;
     stGenerateRaw ??= window.generateRaw        ?? stApi?.generateRaw ?? null;
     stConnectionRequest ??= stApi?.ConnectionManagerRequestService ?? null;
     stSave      ??= window.saveSettingsDebounced ?? stApi?.saveSettingsDebounced ?? null;

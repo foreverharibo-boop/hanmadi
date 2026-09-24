@@ -239,6 +239,28 @@
     text-align: center;
 }
 
+.dp-inst-label-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.dp-inst-save-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--dp-sub);
+    font-size: 0.68rem;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.dp-inst-save-check input {
+    width: 13px;
+    height: 13px;
+    margin: 0;
+    accent-color: var(--dp-accent);
+}
+
 .dp-gen-btn { width: 100%; padding: 10px; font-size: 0.9rem; margin-top: 2px; }
 
 /* ═══════════════════════════════════════════════════════════════════
