@@ -1200,3 +1200,86 @@
     30%  { background: var(--dp-surface2); }
     100% { background: transparent; }
 }
+
+/* ── 확장 탭 내부만 컴팩트하게 (상단 inline-drawer 제목은 영향 없음) ── */
+#dp-panel {
+    gap: 8px;
+    padding: 7px 1px 4px;
+}
+#dp-panel .dp-row { gap: 3px; }
+#dp-panel .dp-label {
+    font-size: 0.66rem;
+    letter-spacing: 0.035em;
+}
+#dp-panel .dp-hint {
+    font-size: 0.72em;
+    line-height: 1.35;
+}
+#dp-panel .dp-genre-row { gap: 4px; }
+
+#dp-panel .dp-toggle {
+    width: 34px;
+    height: 19px;
+    flex: 0 0 34px;
+}
+#dp-panel .dp-toggle-slider { border-radius: 10px; }
+#dp-panel .dp-toggle-slider::before {
+    left: 2px;
+    top: 2px;
+    width: 13px;
+    height: 13px;
+}
+#dp-panel .dp-toggle input:checked + .dp-toggle-slider::before {
+    transform: translateX(15px);
+}
+
+#dp-panel .dp-icon-picker {
+    gap: 3px;
+    margin-bottom: 4px;
+}
+#dp-panel .dp-icon-opt {
+    width: 25px;
+    height: 25px;
+    border-width: 1.5px;
+    border-radius: 5px;
+    font-size: 11px;
+}
+#dp-panel .dp-color-picker {
+    gap: 4px;
+    margin-top: 2px;
+}
+#dp-panel .dp-color-dot {
+    width: 17px;
+    height: 17px;
+    border-width: 2px;
+}
+
+#dp-panel .dp-select {
+    padding: 4px 7px;
+    border-radius: 6px;
+    font-size: 0.76rem;
+}
+#dp-panel .dp-btn {
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+}
+#dp-panel .dp-btn-sm {
+    padding: 3px 7px;
+    font-size: 0.68rem;
+}
+#dp-panel .dp-bg-count-row {
+    gap: 5px;
+    font-size: 0.68rem;
+}
+#dp-panel .dp-bg-count-input {
+    width: 54px;
+    padding: 3px 5px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+}
+#dp-panel .dp-prompt-view-btn {
+    padding: 3px 7px;
+    font-size: 0.66rem;
+}
