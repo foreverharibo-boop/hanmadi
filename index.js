@@ -45,6 +45,7 @@ function getSettings() {
         outputLang: "ko", presets: [], translateMaxTokens: 1000, person: "1st", person3rdName: "",
         lengthMode: "normal", autoTranslateInst: false, defaultEmotions: [], tense: "present", lastPresetId: null,
         profileId: "", profileName: "", multiCount: 1, lastInstruction: "",
+        bgMessageCount: 8, autoSaveInstruction: true,
     };
     // ★ 확장 이름이 "해줘" → "한마디"로 바뀌면서, 예전 설정(프리셋 등)을 한 번만 그대로 옮겨옴
     if (!stSettings[EXT] && stSettings[OLD_EXT]) {
@@ -71,6 +72,9 @@ function getSettings() {
     if (!["past","present","future"].includes(s.tense)) s.tense = "present";
     if (s.lastPresetId === undefined) s.lastPresetId = null;
     if (s.lastInstruction == null) s.lastInstruction = "";
+    const bgMessageCount = parseInt(s.bgMessageCount, 10);
+    s.bgMessageCount = Number.isFinite(bgMessageCount) ? Math.max(1, Math.min(100, bgMessageCount)) : 8;
+    if (typeof s.autoSaveInstruction !== "boolean") s.autoSaveInstruction = true;
     if (s.lastUserMessage == null) s.lastUserMessage = "";
     if (s.quickMode !== true) s.quickMode = false;
     if (s.bgGenerate !== true) s.bgGenerate = false;
@@ -285,7 +289,7 @@ async function translateInstruction(text) {
 // 마지막으로 조립된 프롬프트 (패널의 "주입 프롬프트 보기"용)
 let lastBuiltPrompt = null;
 
-function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, userMessage, bgMode) {
+function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, userMessage, bgMode, bgMessageCount = 8) {
     // ★ 채팅 히스토리는 ST가 generateQuietPrompt 호출 시 자동으로 컨텍스트에 포함시킴
     //   → 여기서 getRecentMsgs로 다시 넣으면 같은 대화가 중복 주입되므로 넣지 않음
     //   단, bgMode(generateRaw)일 때는 ST가 아무것도 안 넣어주므로 캐릭터 설명 + 긴 히스토리를 직접 주입
@@ -351,7 +355,8 @@ function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3
 
     // ★ 프롬프트 맨 끝은 모델이 가장 주의 깊게 보는 위치라서, "직전 상황 이어쓰기"랑
     //   "분량 제한"을 따로 두 번 강조하면 서로 경쟁하게 됨 → 하나로 합쳐서 한 번만 마무리
-    const lastTurns = getLastTurns(bgMode ? 8 : 3);
+    const manualContextCount = Math.max(1, Math.min(100, parseInt(bgMessageCount, 10) || 8));
+    const lastTurns = getLastTurns(bgMode ? manualContextCount : 3);
     const lm = lengthMode || "normal";
     const needsStrictLength = lm === "short" || /^custom:\d+$/.test(lm);
 
@@ -399,7 +404,9 @@ function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3
     return p;
 }
 
-function showPromptViewer() {
+function showPromptViewer(openEvent) {
+    openEvent?.preventDefault?.();
+    openEvent?.stopPropagation?.();
     rm("dp-prompt-viewer");
     const el = document.createElement("div");
     el.id = "dp-prompt-viewer";
@@ -424,8 +431,20 @@ function showPromptViewer() {
         <div class="dp-pv-note">※ 백그라운드 모드가 꺼져 있으면 이 프롬프트 외에 ST가 캐릭터 카드·로어북·채팅 히스토리를 자동으로 추가합니다.</div>
     </div>`;
     mount(el);
-    el.querySelector("#dp-pv-close").addEventListener("click", () => el.remove());
-    el.addEventListener("click", (e) => { if (e.target === el) el.remove(); });
+    // ST의 확장 패널 바깥 클릭 감지기로 이벤트가 전달되면 확장 탭까지 닫힐 수 있으므로
+    // 프롬프트 뷰어 안에서 발생한 포인터 이벤트는 여기서 차단한다.
+    ["pointerdown", "mousedown", "touchstart"].forEach(type => {
+        el.addEventListener(type, e => e.stopPropagation());
+    });
+    el.querySelector("#dp-pv-close").addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        el.remove();
+    });
+    el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (e.target === el) el.remove();
+    });
     el.querySelector("#dp-pv-copy").addEventListener("click", async () => {
         try {
             await navigator.clipboard.writeText(body);
@@ -477,7 +496,7 @@ async function generate(instruction, mode, genre, tone, outputLang, person, pers
     }
     // 번역 단계 끝났음을 알려서 로딩 문구를 "AI 대필 중…"으로 바꿀 수 있게 함
     if (typeof onTranslated === "function") onTranslated();
-    const prompt = buildPrompt(finalInst, mode, genre, tone, outputLang, person, person3rdName, lengthMode || s.lengthMode, tense || s.tense, userMessage, useBg);
+    const prompt = buildPrompt(finalInst, mode, genre, tone, outputLang, person, person3rdName, lengthMode || s.lengthMode, tense || s.tense, userMessage, useBg, s.bgMessageCount);
     if (useDedicatedProfile) {
         return await requestWithProfile(s.profileId, prompt, maxTok);
     }
@@ -1473,16 +1492,19 @@ function showSettingsPopup() {
     // 유저 메시지 칸 — 열 때마다 초기화 (가져오기 버튼으로 불러오면 됨)
     const umTa = el.querySelector("#dp-sp-usermsg");
 
-    // 지시사항 칸 채우기
+    // 지시사항 칸 채우기 — 자동 저장을 꺼두면 매번 빈칸으로 시작
     const instTa = el.querySelector("#dp-sp-inst");
-    if (s.lastInstruction?.trim()) {
-        instTa.value = s.lastInstruction;
-    } else if (s.defaultEmotions.length) {
-        instTa.value = s.defaultEmotions.join(", ");
+    if (s.autoSaveInstruction) {
+        if (s.lastInstruction?.trim()) {
+            instTa.value = s.lastInstruction;
+        } else if (s.defaultEmotions.length) {
+            instTa.value = s.defaultEmotions.join(", ");
+        }
     }
 
-    // 지시사항 자동 임시저장
+    // 지시사항 자동 임시저장 (확장 설정에서 끌 수 있음)
     instTa.addEventListener("input", function () {
+        if (!s.autoSaveInstruction) return;
         s.lastInstruction = this.value;
         saveSettings();
     });
@@ -1644,6 +1666,10 @@ function showSettingsPopup() {
         const emotion = btn.dataset.emotion;
         const cur = ta.value.trim();
         ta.value = cur ? `${cur}, ${emotion}` : emotion;
+        if (s.autoSaveInstruction) {
+            s.lastInstruction = ta.value;
+            saveSettings();
+        }
         btn.classList.add("dp-emotion-active");
         setTimeout(() => btn.classList.remove("dp-emotion-active"), 600);
         ta.focus();
@@ -1691,7 +1717,7 @@ function showSettingsPopup() {
         currentMode = preset.writingMode;
         el.querySelectorAll("#dp-sp-mode-group .dp-mode-btn").forEach(b => b.classList.toggle("active", b.dataset.mode === preset.writingMode));
         el.querySelector("#dp-sp-inst").value = preset.instruction || "";
-        s.lastInstruction = preset.instruction || "";
+        if (s.autoSaveInstruction) s.lastInstruction = preset.instruction || "";
         el.querySelector("#dp-sp-tokens").value = preset.maxTokens ?? 500;
         formalitySlider.value = preset.toneFormality ?? 50;
         playfulnessSlider.value = preset.tonePlayfulness ?? 50;
@@ -1834,6 +1860,7 @@ function showSettingsPopup() {
         s.tense = currentTense;
         s.multiCount = currentMultiCount;
         s.lastPresetId = el.querySelector("#dp-sp-preset").value || null;
+        if (s.autoSaveInstruction) s.lastInstruction = inst;
         saveSettings();
 
         el.remove();
@@ -1858,7 +1885,7 @@ async function quickGenerate() {
     const s = getSettings();
     const sendTa = document.getElementById("send_textarea");
     const um = sendTa?.value?.trim() || "";
-    const inst = s.lastInstruction || "";
+    const inst = s.autoSaveInstruction ? (s.lastInstruction || "") : "";
     const genre = s.selectedGenre || s.genres?.[0] || "소설";
     const tone = { formality: s.toneFormality ?? 50, playfulness: s.tonePlayfulness ?? 50 };
     const person = s.person || "1st";
@@ -1892,6 +1919,7 @@ let wandDone  = false;
 let panelDone = false;
 
 function buildPanelHtml() {
+    const s = getSettings();
     return `
 <div class="inline-drawer">
     <div class="inline-drawer-toggle inline-drawer-header">
@@ -1921,7 +1949,23 @@ function buildPanelHtml() {
                     </label>
                     <span class="dp-hint" style="margin-left:8px;">생성 중 표시 없이 조용히 생성 + 토큰 대폭 절약</span>
                 </div>
-                <div class="dp-hint" style="margin-top:4px;">⚠️ 켜면 ST 기본 주입(전체 히스토리·로어북·시스템 프롬프트)을 우회하고, 캐릭터 설명 + 페르소나 + 직전 8턴만 전송돼. 비용은 크게 줄지만 오래된 맥락·로어북은 반영 안 됨. 끄면 ST가 평소처럼 전부 포함. 단, 아래에서 전용 연결 프로필을 선택한 경우에는 이 토글과 관계없이 독립 요청 방식이 적용돼.</div>
+                <div class="dp-bg-count-row">
+                    <label for="dp-panel-bgcount">최근 메시지</label>
+                    <input id="dp-panel-bgcount" type="number" class="dp-input dp-bg-count-input" min="1" max="100" step="1" value="${s.bgMessageCount}">
+                    <span>개 전송</span>
+                </div>
+                <div class="dp-hint" style="margin-top:4px;">⚠️ 켜면 ST 기본 주입(전체 히스토리·로어북·시스템 프롬프트)을 우회하고, 캐릭터 설명 + 페르소나 + 위에서 지정한 최근 메시지만 전송돼. 비용은 크게 줄지만 오래된 맥락·로어북은 반영 안 됨. 끄면 ST가 평소처럼 전부 포함. 단, 아래에서 전용 연결 프로필을 선택한 경우에는 이 토글과 관계없이 독립 요청 방식이 적용돼.</div>
+            </div>
+
+            <div class="dp-row">
+                <label class="dp-label">지시사항 자동 저장</label>
+                <div class="dp-genre-row">
+                    <label class="dp-toggle" title="켜면 대필 설정의 지시사항을 다음에도 불러옴">
+                        <input type="checkbox" id="dp-panel-autosave-inst">
+                        <span class="dp-toggle-slider"></span>
+                    </label>
+                    <span class="dp-hint" style="margin-left:8px;">끄면 지시사항을 저장하지 않고, 설정 팝업을 열 때 빈칸으로 시작</span>
+                </div>
             </div>
 
             <div class="dp-row">
@@ -1981,7 +2025,7 @@ function buildPanelHtml() {
             </div>
 
             <div class="dp-row">
-                <button id="dp-panel-promptview" class="dp-btn" style="width:100%;"><i class="fa-solid fa-file-lines"></i> 주입 프롬프트 보기</button>
+                <button id="dp-panel-promptview" class="dp-btn dp-prompt-view-btn"><i class="fa-solid fa-file-lines"></i> 주입 프롬프트 보기</button>
             </div>
 
             <div class="dp-row">
@@ -2068,6 +2112,31 @@ function injectPanel() {
         bgToggle.checked = s0.bgGenerate;
         bgToggle.addEventListener("change", () => {
             s0.bgGenerate = bgToggle.checked;
+            saveSettings();
+        });
+    }
+
+    // 백그라운드/전용 프로필 요청에 직접 넣을 최근 메시지 수
+    const bgCountInput = document.getElementById("dp-panel-bgcount");
+    if (bgCountInput) {
+        const s0 = getSettings();
+        const saveBgCount = () => {
+            const value = Math.max(1, Math.min(100, parseInt(bgCountInput.value, 10) || 8));
+            bgCountInput.value = value;
+            s0.bgMessageCount = value;
+            saveSettings();
+        };
+        bgCountInput.addEventListener("change", saveBgCount);
+        bgCountInput.addEventListener("blur", saveBgCount);
+    }
+
+    // 지시사항 자동 저장 토글
+    const autoSaveInstToggle = document.getElementById("dp-panel-autosave-inst");
+    if (autoSaveInstToggle) {
+        const s0 = getSettings();
+        autoSaveInstToggle.checked = s0.autoSaveInstruction;
+        autoSaveInstToggle.addEventListener("change", () => {
+            s0.autoSaveInstruction = autoSaveInstToggle.checked;
             saveSettings();
         });
     }

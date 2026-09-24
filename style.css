@@ -217,6 +217,28 @@
 }
 .dp-btn-primary:hover { filter: brightness(1.1); }
 
+.dp-prompt-view-btn {
+    align-self: flex-start;
+    width: auto;
+    padding: 4px 9px;
+    font-size: 0.72rem;
+    border-radius: 6px;
+}
+
+.dp-bg-count-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--dp-sub);
+    font-size: 0.75rem;
+}
+.dp-bg-count-input {
+    flex: none;
+    width: 64px;
+    padding: 4px 7px;
+    text-align: center;
+}
+
 .dp-gen-btn { width: 100%; padding: 10px; font-size: 0.9rem; margin-top: 2px; }
 
 /* ═══════════════════════════════════════════════════════════════════
