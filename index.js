@@ -2,7 +2,8 @@
 
 const EXT = "한마디";
 const OLD_EXT = "해줘"; // ★ 예전 확장 이름 — 설정 마이그레이션용
-const DEFAULT_GENRES = ["로맨스코메디", "코메디", "일상", "공포", "슬픔"];
+const NONE_GENRE = "none";
+const DEFAULT_GENRES = ["로맨스코메디", "코메디", "일상", "공포", "슬픔", NONE_GENRE];
 
 const ICON_COLORS = {
     inherit:      "",
@@ -54,6 +55,8 @@ function getSettings() {
     if (!stSettings[EXT]) stSettings[EXT] = {};
     const s = stSettings[EXT];
     if (!Array.isArray(s.genres) || !s.genres.length) s.genres = [...DEFAULT_GENRES];
+    // 뒤에 추가해 기존 장르 선택 인덱스와 사용자 장르 목록을 유지한다.
+    if (!s.genres.includes(NONE_GENRE)) s.genres.push(NONE_GENRE);
     if (s.selectedGenre == null || s.selectedGenre >= s.genres.length) s.selectedGenre = 0;
     if (!s.writingMode) s.writingMode = "both";
     if (!s.maxTokens)   s.maxTokens = 500;
@@ -306,7 +309,8 @@ function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3
 
     let p = `# Ghost-writing Task\n`;
     p += `You must now write the next message on behalf of ${user} (the user). Write from ${user}'s perspective, NOT the character's perspective.\n\n`;
-    p += `Genre: ${genre}\nFormat: ${modeLbl}\nPerson: ${personLbl}\nTense: ${tenseLbl}\n\n`;
+    if (genre && genre !== NONE_GENRE) p += `Genre: ${genre}\n`;
+    p += `Format: ${modeLbl}\nPerson: ${personLbl}\nTense: ${tenseLbl}\n\n`;
     if (persona) p += `## User Persona\n${persona}\n\n`;
     const charObj = ctx.characters?.[ctx.characterId];
     const charDesc = charObj?.description?.trim();
@@ -325,7 +329,7 @@ function buildPrompt(instruction, mode, genre, tone, outputLang, person, person3
     p += `- Your reply MUST directly continue from the recent conversation. Never ignore the flow or invent a new situation.\n`;
     p += `- Focus on how ${user} would react to what ${char} last said/did.\n`;
     p += `- Do not invent events, characters, or settings that are not in the conversation.\n`;
-    p += `- Keep the genre (${genre}) mood, but the content must start from the current conversation context.\n`;
+    if (genre && genre !== NONE_GENRE) p += `- Keep the genre (${genre}) mood, but the content must start from the current conversation context.\n`;
     p += `- [No Format Contamination] Even if ${char}'s recent messages contain info blocks or system tags (weather/date/location/status/stats etc.), that is ${char}'s formatting only. NEVER imitate those info blocks, tags, or bracket formats. Write only a pure conversational message the way ${user} actually writes, as shown in [Style Reference] above.\n`;
     if (is3rd && name3rd) {
         p += `- Write strictly in third person. Refer to the protagonist as '${name3rd}', never 'I'.\n`;
@@ -1024,10 +1028,10 @@ function openGenreManager(onClose) {
     const listHtml = () => s.genres.map((g,i) => `
 <li class="dp-genre-item" data-i="${i}">
     <span class="dp-genre-name">${esc(g)}</span>
-    <div class="dp-genre-acts">
+    ${g === NONE_GENRE ? '<span class="dp-hint">장르 없음</span>' : `<div class="dp-genre-acts">
         <button class="dp-icon-btn dp-edit" data-i="${i}">✏️</button>
         <button class="dp-icon-btn dp-del"  data-i="${i}">🗑️</button>
-    </div>
+    </div>`}
 </li>`).join("");
 
     const el = document.createElement("div");
@@ -1051,7 +1055,7 @@ function openGenreManager(onClose) {
     el.querySelector("#dp-gm-x").addEventListener("click", close);
     const addGenre = () => {
         const inp = el.querySelector("#dp-gm-input");
-        const val = inp.value.trim(); if (!val) return;
+        const val = inp.value.trim(); if (!val || val === NONE_GENRE) return;
         s.genres.push(val); saveSettings(); inp.value = ""; refresh();
     };
     el.querySelector("#dp-gm-add").addEventListener("click", addGenre);
@@ -1059,15 +1063,17 @@ function openGenreManager(onClose) {
     el.querySelector("#dp-gm-list").addEventListener("click", e => {
         const btn = e.target.closest("button"); if (!btn) return;
         const idx = parseInt(btn.dataset.i);
+        if (s.genres[idx] === NONE_GENRE) return;
         if (btn.classList.contains("dp-del")) {
             if (s.genres.length <= 1) { alert("장르는 최소 1개 이상 있어야 합니다."); return; }
             s.genres.splice(idx, 1);
+            if (idx < s.selectedGenre) s.selectedGenre--;
             if (s.selectedGenre >= s.genres.length) s.selectedGenre = s.genres.length - 1;
             saveSettings(); refresh();
         }
         if (btn.classList.contains("dp-edit")) {
             const name = prompt("장르 이름 수정:", s.genres[idx]);
-            if (name?.trim()) { s.genres[idx] = name.trim(); saveSettings(); refresh(); }
+            if (name?.trim() && name.trim() !== NONE_GENRE) { s.genres[idx] = name.trim(); saveSettings(); refresh(); }
         }
     });
 }
@@ -1559,6 +1565,7 @@ function showSettingsPopup() {
 
     // 장르 변경 시 톤 슬라이더 자동 추천
     const applyToneHintPopup = (genreName, flash = true) => {
+        if (genreName === NONE_GENRE) return;
         const hint = genreToneHint(genreName);
         formalitySlider.value = hint.formality;
         playfulnessSlider.value = hint.playfulness;
@@ -1902,7 +1909,7 @@ async function quickGenerate() {
     const sendTa = document.getElementById("send_textarea");
     const um = sendTa?.value?.trim() || "";
     const inst = s.autoSaveInstruction ? (s.lastInstruction || "") : "";
-    const genre = s.selectedGenre || s.genres?.[0] || "소설";
+    const genre = s.genres[s.selectedGenre] ?? s.genres[0] ?? NONE_GENRE;
     const tone = { formality: s.toneFormality ?? 50, playfulness: s.tonePlayfulness ?? 50 };
     const person = s.person || "1st";
     const name3rd = s.person3rdName || "";
