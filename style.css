@@ -385,6 +385,38 @@
 
 .dp-result-modal { max-width: 560px; }
 
+.dp-result-modal .dp-modal-body {
+    flex: 0 1 auto;
+    min-height: 0;
+    scrollbar-gutter: stable;
+}
+
+.dp-result-modal .dp-result-textarea {
+    display: block;
+    min-height: 160px;
+    max-height: none;
+    overflow-y: hidden;
+    resize: none;
+}
+
+.dp-result-modal .dp-action-bar {
+    flex-direction: row;
+    gap: 6px;
+    padding: 8px 12px;
+}
+
+.dp-result-modal .dp-action-bar .dp-btn {
+    width: auto;
+    min-height: 34px;
+    padding: 5px 9px;
+    font-size: 0.78rem;
+    gap: 4px;
+}
+
+.dp-result-modal .dp-modify-box {
+    flex-shrink: 0;
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    Multi-Result Picker (3개 버전 생성)
    ═══════════════════════════════════════════════════════════════════ */
@@ -593,6 +625,11 @@
     .dp-modal { max-width: 100% !important; max-height: 90vh !important; border-radius: 12px !important; }
     .dp-action-bar { flex-direction: column; }
     .dp-action-bar .dp-btn { width: 100%; }
+    .dp-result-modal .dp-action-bar {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .dp-result-modal #dp-insert { grid-column: 1 / -1; }
     .dp-mode-btn, .dp-person-btn { font-size: 0.74rem; padding: 6px 2px; }
     .dp-token-hint { display: none; }
 }

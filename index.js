@@ -788,6 +788,19 @@ function showError(msg) {
     el.querySelector("#dp-err-ok").addEventListener("click", close);
 }
 
+// 결과 길이만큼 펼치고, 화면보다 길면 모달 본문에서 스크롤한다.
+function resizeResultTextareas(root = document) {
+    root.querySelectorAll(".dp-result-modal .dp-result-textarea").forEach(ta => {
+        if (!ta.getClientRects().length) return;
+        const style = getComputedStyle(ta);
+        const borders = (parseFloat(style.borderTopWidth) || 0) + (parseFloat(style.borderBottomWidth) || 0);
+        ta.style.height = "0px";
+        ta.style.height = `${Math.ceil(ta.scrollHeight + borders)}px`;
+    });
+}
+
+window.addEventListener("resize", () => resizeResultTextareas());
+
 // entry = { result, instruction, mode, genre, tone, outputLang, person, person3rdName, translation? }
 function showResult(entry, onBack) {
     rm("dp-result");
@@ -859,6 +872,7 @@ function showResult(entry, onBack) {
 
     const resultTextarea = el.querySelector("#dp-res-text");
     const persistResultEdit = () => {
+        resizeResultTextareas(el);
         entry.result = resultTextarea.value;
         if (typeof onBack !== "function") savePendingDraft({ type: "single", entry });
     };
@@ -945,6 +959,7 @@ function showResult(entry, onBack) {
     if (entry.translation) {
         translationText.value = entry.translation;
         translationBox.style.display = "flex";
+        resizeResultTextareas(el);
         translateBtn.innerHTML = '<i class="fa-solid fa-eye-slash"></i> 번역 숨기기';
     }
     translateBtn.addEventListener("click", async () => {
@@ -957,6 +972,7 @@ function showResult(entry, onBack) {
         if (entry.translation) {
             translationText.value = entry.translation;
             translationBox.style.display = "flex";
+            resizeResultTextareas(el);
             translateBtn.innerHTML = '<i class="fa-solid fa-eye-slash"></i> 번역 숨기기';
             return;
         }
@@ -970,6 +986,7 @@ function showResult(entry, onBack) {
             if (typeof onBack !== "function") savePendingDraft({ type: "single", entry });
             translationText.value = translated;
             translationBox.style.display = "flex";
+            resizeResultTextareas(el);
             translateBtn.innerHTML = '<i class="fa-solid fa-eye-slash"></i> 번역 숨기기';
         } catch (e) {
             showError(e.message || "번역 실패. ST API 연결 상태를 확인해 주세요.");
@@ -990,9 +1007,11 @@ function showResult(entry, onBack) {
     });
 
     translationText.addEventListener("input", () => {
+        resizeResultTextareas(el);
         entry.translation = translationText.value;
         if (typeof onBack !== "function") savePendingDraft({ type: "single", entry });
     });
+    resizeResultTextareas(el);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
