@@ -59,7 +59,7 @@ function getSettings() {
     if (!s.genres.includes(NONE_GENRE)) s.genres.push(NONE_GENRE);
     if (s.selectedGenre == null || s.selectedGenre >= s.genres.length) s.selectedGenre = 0;
     if (!s.writingMode) s.writingMode = "both";
-    if (!s.maxTokens)   s.maxTokens = 500;
+    if (s.maxTokens == null) s.maxTokens = 500;
     if (s.toneFormality == null)   s.toneFormality = DEFAULT_TONE.formality;
     if (s.tonePlayfulness == null) s.tonePlayfulness = DEFAULT_TONE.playfulness;
     if (s.outputLang !== "ko" && s.outputLang !== "en") s.outputLang = "ko";
@@ -277,12 +277,16 @@ function lengthSentence(mode) {
 }
 
 // 지시사항 한→영 자동 번역 (autoTranslateInst 켜져 있을 때)
-async function translateInstruction(text) {
+async function translateInstruction(text, operation) {
     const prompt = `Translate the following instruction into natural English. Output ONLY the translated instruction, no explanation or quotes.\n\n${text}`;
     try {
-        const out = await requestStandalone(prompt, 300);
+        const out = await requestStandalone(prompt, 300, operation);
         return out.trim() || text;
-    } catch { return text; }
+    } catch (e) {
+        assertGenerationCurrent(operation);
+        if (e.name === "AbortError") throw e;
+        return text;
+    }
 }
 
 // 마지막으로 조립된 프롬프트 (패널의 "주입 프롬프트 보기"용)
@@ -460,7 +464,7 @@ function escHtml(s) {
 //  전용 연결 프로필 요청 (현재 활성 프로필은 절대 변경하지 않음)
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function requestWithProfile(profileId, prompt, maxTokens) {
+async function requestWithProfile(profileId, prompt, maxTokens, operation) {
     if (!stConnectionRequest || typeof stConnectionRequest.sendRequest !== "function") {
         throw new Error("전용 연결 프로필 요청 기능을 찾을 수 없습니다. SillyTavern 1.18 이상인지 확인해 주세요.");
     }
@@ -468,7 +472,7 @@ async function requestWithProfile(profileId, prompt, maxTokens) {
         profileId,
         prompt,
         maxTokens ?? undefined,
-        { stream: false, extractData: true, includePreset: false, includeInstruct: false },
+        { stream: false, extractData: true, includePreset: false, includeInstruct: false, signal: operation?.controller?.signal },
     );
     const text = typeof result === "string" ? result : result?.content;
     if (typeof text !== "string") throw new Error("전용 연결 프로필이 빈 응답을 반환했습니다.");
@@ -477,31 +481,38 @@ async function requestWithProfile(profileId, prompt, maxTokens) {
 
 // 전체 ST 컨텍스트를 붙이지 않는 독립 요청. 전용 프로필이 있으면 그 프로필을 사용하고,
 // 없으면 현재 연결의 generateRaw를 사용한다.
-async function requestStandalone(prompt, maxTokens) {
+async function requestStandalone(prompt, maxTokens, operation) {
+    assertGenerationCurrent(operation);
     const s = getSettings();
-    if (s.profileId) return await requestWithProfile(s.profileId, prompt, maxTokens);
-    if (typeof stGenerateRaw !== "function") {
-        throw new Error("독립 생성 API(generateRaw)를 찾을 수 없습니다. SillyTavern 1.18 이상인지 확인해 주세요.");
+    let result;
+    if (s.profileId) {
+        result = await requestWithProfile(s.profileId, prompt, maxTokens, operation);
+    } else {
+        if (typeof stGenerateRaw !== "function") {
+            throw new Error("독립 생성 API(generateRaw)를 찾을 수 없습니다. SillyTavern 1.18 이상인지 확인해 주세요.");
+        }
+        // 지원하는 ST의 객체 인자 API를 한 번만 호출한다. 통신/인증 오류는 재전송하지 않는다.
+        result = await stGenerateRaw({ prompt, responseLength: maxTokens });
     }
-    try {
-        const result = await stGenerateRaw({ prompt, responseLength: maxTokens });
-        if (typeof result === "string") return result;
-    } catch (e) { /* 구버전 시그니처로 재시도 */ }
-    return await stGenerateRaw(prompt, null, false, false, null, maxTokens);
+    assertGenerationCurrent(operation);
+    if (typeof result !== "string") throw new Error("대필 API가 올바른 텍스트 응답을 반환하지 않았습니다.");
+    return result;
 }
 
-async function generate(instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, onTranslated, userMessage) {
+async function generate(instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, onTranslated, userMessage, operation = captureGeneration()) {
+    assertGenerationCurrent(operation);
     const s = getSettings();
     const maxTok = s.maxTokens > 0 ? s.maxTokens : null;
     // 지시사항 자동 번역 (켜져 있고 내용이 한국어인 경우)
     let finalInst = instruction;
     if (s.autoTranslateInst && instruction?.trim()) {
-        finalInst = await translateInstruction(instruction.trim());
+        finalInst = await translateInstruction(instruction.trim(), operation);
     }
+    assertGenerationCurrent(operation);
     // 번역 단계 끝났음을 알려서 로딩 문구를 "AI 대필 중…"으로 바꿀 수 있게 함
     if (typeof onTranslated === "function") onTranslated();
     const prompt = buildPrompt(finalInst, mode, genre, tone, outputLang, person, person3rdName, lengthMode || s.lengthMode, tense || s.tense, userMessage, s.bgMessageCount);
-    return await requestStandalone(prompt, maxTok);
+    return await requestStandalone(prompt, maxTok, operation);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -510,10 +521,10 @@ async function generate(instruction, mode, genre, tone, outputLang, person, pers
 //  추가할 수 있음. 대필과 마찬가지로 전체 ST 컨텍스트가 붙지 않는 독립 요청을 사용.
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function translateText(text, targetLangLabel, maxTokens) {
+async function translateText(text, targetLangLabel, maxTokens, operation = captureGeneration()) {
     const prompt = `다음 텍스트를 자연스러운 ${targetLangLabel}로 번역하세요. 설명이나 추가 코멘트 없이 번역 결과만 출력하세요.\n\n---\n${text}\n---`;
     const budget = !maxTokens || maxTokens <= 0 ? null : maxTokens;
-    const out = await requestStandalone(prompt, budget);
+    const out = await requestStandalone(prompt, budget, operation);
     return out.trim();
 }
 
@@ -527,9 +538,57 @@ const MAX_CACHED_CHATS = 20;
 
 let sessionHistory = [];
 let generationToken = 0; // 취소 감지용 — 취소 누르면 증가시켜서 진행 중이던 결과를 무시함
+let activeGeneration = null;
 let historyIndex = -1;
 let sessionHistoryChatKey = null;
 let pendingDraftMemory = null;
+
+function captureGeneration() {
+    return {
+        token: generationToken,
+        chatKey: getDraftChatKey(),
+        inputSnapshot: document.getElementById("send_textarea")?.value || "",
+    };
+}
+
+function isGenerationCurrent(operation) {
+    return !operation || (operation.token === generationToken
+        && operation.chatKey === getDraftChatKey()
+        && !operation.controller?.signal.aborted);
+}
+
+function assertGenerationCurrent(operation) {
+    if (isGenerationCurrent(operation)) return;
+    const error = new Error("취소되었거나 채팅이 변경된 대필입니다.");
+    error.name = "AbortError";
+    throw error;
+}
+
+function cancelGeneration() {
+    generationToken++;
+    activeGeneration?.controller.abort();
+    activeGeneration = null;
+    hideLoading();
+    hideQuickToast();
+}
+
+function beginGeneration() {
+    cancelGeneration();
+    activeGeneration = { ...captureGeneration(), controller: new AbortController() };
+    return activeGeneration;
+}
+
+function finishGeneration(operation) {
+    if (activeGeneration !== operation) return;
+    activeGeneration = null;
+    hideLoading();
+    hideQuickToast();
+}
+
+function handleDraftChatChanged() {
+    cancelGeneration();
+    ["dp-result", "dp-multi-result", "dp-settings-popup"].forEach(rm);
+}
 
 function getDraftChatKey() {
     const ctx = getCtx();
@@ -669,9 +728,9 @@ function restorePendingDraft() {
     if (!cached) return false;
 
     if (cached.type === "multi") {
-        showMultiResult([...cached.results], { ...cached.baseEntry });
+        showMultiResult([...cached.results], { ...cached.baseEntry, chatKey: getDraftChatKey() });
     } else {
-        sessionHistory = [{ ...cached.entry }];
+        sessionHistory = [{ ...cached.entry, chatKey: getDraftChatKey() }];
         historyIndex = 0;
         sessionHistoryChatKey = getDraftChatKey();
         showResult(sessionHistory[0]);
@@ -714,6 +773,18 @@ function insertToInput(text, genre, mode, instruction, replace = false) {
     }
 }
 
+function insertDraftToInput(text, entry) {
+    const ta = document.getElementById("send_textarea");
+    if (!ta || (entry.chatKey && entry.chatKey !== getDraftChatKey())) return false;
+    const hasUM = !!entry.userMessage?.trim();
+    const inputUnchanged = entry.inputSnapshot === undefined || ta.value === entry.inputSnapshot;
+    // 생성 중 사용자가 고친 글은 그대로 두고 AI가 쓴 부분만 뒤에 붙인다.
+    const replace = hasUM && inputUnchanged;
+    const combined = replace ? `${entry.userMessage.trim()}\n${text}` : text;
+    insertToInput(combined, entry.genre, entry.mode, entry.instruction, replace);
+    return true;
+}
+
 // ── 퀵 모드 전용 토스트 ──
 function showQuickToast() {
     let toast = document.getElementById("dp-quick-toast");
@@ -731,15 +802,8 @@ function showQuickToast() {
         sendForm?.insertAdjacentElement("beforebegin", toast);
     }
     toast.style.display = "flex";
-    document.getElementById("dp-qt-cancel")?.addEventListener("click", () => {
-        ++generationToken;
-        hideQuickToast();
-        // ST의 실제 API 요청도 중단
-        try {
-            const stopBtn = document.getElementById("mes_stop");
-            if (stopBtn) stopBtn.click();
-        } catch (e) { console.warn("[한마디] ST 생성 중단 실패:", e); }
-    });
+    const cancelBtn = document.getElementById("dp-qt-cancel");
+    if (cancelBtn) cancelBtn.onclick = cancelGeneration;
 }
 function hideQuickToast() {
     const toast = document.getElementById("dp-quick-toast");
@@ -764,16 +828,12 @@ function showLoading(msg) {
     <button id="dp-loading-cancel" class="dp-btn dp-btn-sm">취소</button>
 </div>`;
     mount(el);
-    el.querySelector("#dp-loading-cancel").addEventListener("click", () => {
-        generationToken++; // 진행 중인 생성 결과를 무효화
-        hideLoading();
-    });
+    el.querySelector("#dp-loading-cancel").addEventListener("click", cancelGeneration);
 }
 function hideLoading() { rm("dp-loading"); }
 function updateLoadingMessage(msg) {
     const p = document.querySelector("#dp-loading .dp-loading-modal p");
     if (p) p.textContent = msg;
-    else showLoading(msg);
 }
 
 function showError(msg) {
@@ -840,6 +900,7 @@ function showResult(entry, onBack) {
             <span class="dp-tag dp-tag-count">${result.trim().length}자</span>
         </div>
         ${instruction?.trim() ? `<div class="dp-inst-preview">💬 지시: ${esc(instruction.trim())}</div>` : ""}
+        ${entry.inputChanged ? '<div class="dp-inst-preview">입력창 내용이 바뀌어 결과를 따로 표시했어요. 현재 입력을 확인한 뒤 삽입해 주세요.</div>' : ""}
         ${hasUM ? `<div class="dp-usermsg-section">
             <div class="dp-usermsg-label">📝 내가 쓴 부분</div>
             <div class="dp-usermsg-text">${esc(userMessage.trim())}</div>
@@ -890,8 +951,7 @@ function showResult(entry, onBack) {
 
     el.querySelector("#dp-insert").addEventListener("click", () => {
         const aiText = el.querySelector("#dp-res-text").value;
-        const combined = hasUM ? `${userMessage.trim()}\n${aiText}` : aiText;
-        insertToInput(combined, genre, mode, instruction, hasUM);
+        if (!insertDraftToInput(aiText, entry)) return;
         clearPendingDraft();
         el.remove();
         rm("dp-multi-result");
@@ -906,18 +966,20 @@ function showResult(entry, onBack) {
 
     el.querySelector("#dp-regen").addEventListener("click", async () => {
         el.remove();
-        const myToken = ++generationToken;
+        const operation = beginGeneration();
         showLoading();
         try {
-            const r = await generate(instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, () => updateLoadingMessage("AI 대필 중…"), userMessage);
-            if (myToken !== generationToken) return;
+            const r = await generate(instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, () => updateLoadingMessage("AI 대필 중…"), userMessage, operation);
+            if (!isGenerationCurrent(operation)) return;
             hideLoading();
-            const newEntry = { result: r, instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, userMessage };
+            const newEntry = { result: r, instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, userMessage, inputSnapshot: entry.inputSnapshot, chatKey: operation.chatKey };
             pushHistory(newEntry);
             showResult(newEntry, onBack);
         } catch (e) {
-            if (myToken !== generationToken) return;
+            if (!isGenerationCurrent(operation) || e.name === "AbortError") return;
             hideLoading(); showError(e.message);
+        } finally {
+            finishGeneration(operation);
         }
     });
 
@@ -933,18 +995,20 @@ function showResult(entry, onBack) {
         const prev = el.querySelector("#dp-res-text").value;
         const combined = [instruction, `이전 대필 결과:\n${prev}`, note ? `수정 지시: ${note}` : ""].filter(Boolean).join("\n\n");
         el.remove();
-        const myToken = ++generationToken;
+        const operation = beginGeneration();
         showLoading();
         try {
-            const r = await generate(combined, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, () => updateLoadingMessage("AI 대필 중…"), userMessage);
-            if (myToken !== generationToken) return;
+            const r = await generate(combined, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, () => updateLoadingMessage("AI 대필 중…"), userMessage, operation);
+            if (!isGenerationCurrent(operation)) return;
             hideLoading();
-            const newEntry = { result: r, instruction: combined, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, userMessage };
+            const newEntry = { result: r, instruction: combined, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, userMessage, inputSnapshot: entry.inputSnapshot, chatKey: operation.chatKey };
             pushHistory(newEntry);
             showResult(newEntry, onBack);
         } catch (e) {
-            if (myToken !== generationToken) return;
+            if (!isGenerationCurrent(operation) || e.name === "AbortError") return;
             hideLoading(); showError(e.message);
+        } finally {
+            finishGeneration(operation);
         }
     });
 
@@ -993,6 +1057,7 @@ function showResult(entry, onBack) {
             resizeResultTextareas(el);
             translateBtn.innerHTML = '<i class="fa-solid fa-eye-slash"></i> 번역 숨기기';
         } catch (e) {
+            if (e.name === "AbortError") return;
             showError(e.message || "번역 실패. ST API 연결 상태를 확인해 주세요.");
             translateBtn.innerHTML = '<i class="fa-solid fa-language"></i> 번역';
         } finally {
@@ -1003,8 +1068,7 @@ function showResult(entry, onBack) {
     // 번역본 삽입
     el.querySelector("#dp-translation-insert").addEventListener("click", () => {
         const transText = translationText.value;
-        const combined = hasUM ? `${userMessage.trim()}\n${transText}` : transText;
-        insertToInput(combined, genre, mode, instruction, hasUM);
+        if (!insertDraftToInput(transText, entry)) return;
         clearPendingDraft();
         el.remove();
         rm("dp-multi-result");
@@ -1098,20 +1162,22 @@ async function runGenerate(inst, mode, genre, maxTokens, tone, outputLang, perso
     const lm = lengthMode || s.lengthMode || "normal";
     const tn = tense || s.tense || "present";
     const um = userMessage || "";
-    const myToken = ++generationToken;
+    const operation = beginGeneration();
     if (s.autoTranslateInst && inst?.trim()) showLoading("지시사항 번역 중…");
     else showLoading();
     try {
-        const result = await generate(inst, mode, genre, tone, outputLang, person, person3rdName, lm, tn, () => updateLoadingMessage("AI 대필 중…"), um);
-        if (myToken !== generationToken) return;
+        const result = await generate(inst, mode, genre, tone, outputLang, person, person3rdName, lm, tn, () => updateLoadingMessage("AI 대필 중…"), um, operation);
+        if (!isGenerationCurrent(operation)) return;
         hideLoading();
-        const entry = { result, instruction: inst, mode, genre, tone, outputLang, person, person3rdName, lengthMode: lm, tense: tn, userMessage: um };
+        const entry = { result, instruction: inst, mode, genre, tone, outputLang, person, person3rdName, lengthMode: lm, tense: tn, userMessage: um, inputSnapshot: operation.inputSnapshot, chatKey: operation.chatKey };
         pushHistory(entry);
         showResult(entry);
     } catch (e) {
-        if (myToken !== generationToken) return;
+        if (!isGenerationCurrent(operation) || e.name === "AbortError") return;
         hideLoading();
         showError(e.message || "생성 실패. ST API 연결 상태를 확인해 주세요.");
+    } finally {
+        finishGeneration(operation);
     }
 }
 
@@ -1121,15 +1187,15 @@ async function runGenerateMulti(count, inst, mode, genre, maxTokens, tone, outpu
     const lm = lengthMode || s.lengthMode || "normal";
     const tn = tense || s.tense || "present";
     const um = userMessage || "";
-    const myToken = ++generationToken;
+    const operation = beginGeneration();
     if (s.autoTranslateInst && inst?.trim()) showLoading("지시사항 번역 중…");
     else showLoading(`${count}개 버전 생성 중…`);
     try {
         const jobs = Array.from({ length: count }, () =>
-            generate(inst, mode, genre, tone, outputLang, person, person3rdName, lm, tn, () => updateLoadingMessage(`${count}개 버전 생성 중…`), um)
+            generate(inst, mode, genre, tone, outputLang, person, person3rdName, lm, tn, () => updateLoadingMessage(`${count}개 버전 생성 중…`), um, operation)
         );
         const settled = await Promise.allSettled(jobs);
-        if (myToken !== generationToken) return; // 취소됨
+        if (!isGenerationCurrent(operation)) return; // 취소됨
         hideLoading();
         const results = settled
             .filter(r => r.status === "fulfilled")
@@ -1138,12 +1204,14 @@ async function runGenerateMulti(count, inst, mode, genre, maxTokens, tone, outpu
             showError("생성 실패. ST API 연결 상태를 확인해 주세요.");
             return;
         }
-        const baseEntry = { instruction: inst, mode, genre, tone, outputLang, person, person3rdName, lengthMode: lm, tense: tn, userMessage: um };
+        const baseEntry = { instruction: inst, mode, genre, tone, outputLang, person, person3rdName, lengthMode: lm, tense: tn, userMessage: um, inputSnapshot: operation.inputSnapshot, chatKey: operation.chatKey };
         showMultiResult(results, baseEntry);
     } catch (e) {
-        if (myToken !== generationToken) return;
+        if (!isGenerationCurrent(operation) || e.name === "AbortError") return;
         hideLoading();
         showError(e.message || "생성 실패. ST API 연결 상태를 확인해 주세요.");
+    } finally {
+        finishGeneration(operation);
     }
 }
 
@@ -1217,8 +1285,7 @@ function showMultiResult(results, baseEntry) {
         btn.addEventListener("click", () => {
             const i = parseInt(btn.dataset.i);
             const text = el.querySelector(`.dp-multi-textarea[data-i="${i}"]`).value;
-            const combined = hasUM ? `${userMessage.trim()}\n${text}` : text;
-            insertToInput(combined, genre, mode, instruction, hasUM);
+            if (!insertDraftToInput(text, baseEntry)) return;
             clearPendingDraft();
             el.remove();
         });
@@ -1240,6 +1307,7 @@ function showMultiResult(results, baseEntry) {
                 results[i] = r;
                 persistMulti();
             } catch (e) {
+                if (e.name === "AbortError") return;
                 showError(e.message || "재생성 실패");
             } finally {
                 btn.disabled = false;
@@ -1254,7 +1322,7 @@ function showMultiResult(results, baseEntry) {
             const i = parseInt(btn.dataset.i);
             const text = el.querySelector(`.dp-multi-textarea[data-i="${i}"]`).value;
             el.classList.add("dp-hidden"); // 지우지 않고 숨김 — 뒤로가기용
-            const entry = { result: text, instruction, mode, genre, tone, outputLang, person, person3rdName, lengthMode, tense, userMessage };
+            const entry = { ...baseEntry, result: text };
             pushHistory(entry);
             showResult(entry, () => {
                 el.classList.remove("dp-hidden"); // 뒤로가기: 3개 목록 화면 복원
@@ -1462,7 +1530,7 @@ function showSettingsPopup() {
                 <input id="dp-sp-tokens" type="number" class="dp-input dp-token-input"
                     min="0" max="4096" step="50" value="${s.maxTokens}" placeholder="500">
                 <span class="dp-token-unit">tokens</span>
-                <span class="dp-token-hint">(0 = 제한 없음)</span>
+                <span class="dp-token-hint">(0 = 별도 지정 안 함)</span>
             </div>
         </div>
 
@@ -1472,7 +1540,7 @@ function showSettingsPopup() {
                 <input id="dp-sp-translate-tokens" type="number" class="dp-input dp-token-input"
                     min="0" max="4096" step="50" value="${s.translateMaxTokens}" placeholder="1000">
                 <span class="dp-token-unit">tokens</span>
-                <span class="dp-token-hint">(0 = 제한 없음)</span>
+                <span class="dp-token-hint">(0 = 별도 지정 안 함)</span>
             </div>
         </div>
 
@@ -1918,19 +1986,27 @@ async function quickGenerate() {
     const lang = s.outputLang || "";
     const mode = s.writingMode || "continue";
 
-    const myToken = ++generationToken;
+    const operation = beginGeneration();
     showQuickToast();
     try {
-        const result = await generate(inst, mode, genre, tone, lang, person, name3rd, lm, tn, null, um);
-        if (myToken !== generationToken) return;
+        const result = await generate(inst, mode, genre, tone, lang, person, name3rd, lm, tn, null, um, operation);
+        if (!isGenerationCurrent(operation)) return;
         hideQuickToast();
-        // 결과 모달 없이 바로 인풋에 삽입
-        const combined = um ? `${um}\n${result}` : result;
-        insertToInput(combined, genre, mode, inst, !!um);
+        const entry = { result, instruction: inst, mode, genre, tone, outputLang: lang, person, person3rdName: name3rd, lengthMode: lm, tense: tn, userMessage: um, inputSnapshot: operation.inputSnapshot, chatKey: operation.chatKey };
+        const currentInput = document.getElementById("send_textarea");
+        if (!currentInput || currentInput.value !== operation.inputSnapshot) {
+            entry.inputChanged = true;
+            pushHistory(entry);
+            showResult(entry);
+        } else {
+            insertDraftToInput(result, entry);
+        }
     } catch (e) {
-        if (myToken !== generationToken) return;
+        if (!isGenerationCurrent(operation) || e.name === "AbortError") return;
         hideQuickToast();
         showError(e.message || "생성 실패. ST API 연결 상태를 확인해 주세요.");
+    } finally {
+        finishGeneration(operation);
     }
 }
 
@@ -2241,6 +2317,11 @@ jQuery(async () => {
     stGetCtx    ??= window.getContext            ?? (window.SillyTavern?.getContext?.bind(window.SillyTavern)) ?? null;
     stSettings  ??= window.extension_settings    ?? stApi?.extensionSettings ?? null;
     stPowerUser ??= window.power_user            ?? stApi?.powerUserSettings ?? null;
+
+    const chatEvents = stApi?.eventTypes ?? stApi?.event_types;
+    if (stApi?.eventSource && chatEvents?.CHAT_CHANGED) {
+        stApi.eventSource.on(chatEvents.CHAT_CHANGED, handleDraftChatChanged);
+    }
 
     tryInject();
 
