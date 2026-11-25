@@ -3,7 +3,7 @@
 const EXT = "한마디";
 const OLD_EXT = "해줘"; // ★ 예전 확장 이름 — 설정 마이그레이션용
 const NONE_GENRE = "none";
-const DEFAULT_GENRES = ["로맨스코메디", "코메디", "일상", "공포", "슬픔", NONE_GENRE];
+const DEFAULT_GENRES = [NONE_GENRE, "로맨스코메디", "코메디", "일상", "공포", "슬픔"];
 
 const ICON_COLORS = {
     inherit:      "",
@@ -55,8 +55,14 @@ function getSettings() {
     if (!stSettings[EXT]) stSettings[EXT] = {};
     const s = stSettings[EXT];
     if (!Array.isArray(s.genres) || !s.genres.length) s.genres = [...DEFAULT_GENRES];
-    // 뒤에 추가해 기존 장르 선택 인덱스와 사용자 장르 목록을 유지한다.
-    if (!s.genres.includes(NONE_GENRE)) s.genres.push(NONE_GENRE);
+    // none을 맨 위로 옮기되 기존에 선택한 장르는 그대로 유지한다.
+    const noneIndex = s.genres.indexOf(NONE_GENRE);
+    if (noneIndex !== 0) {
+        const selectedGenre = s.genres[s.selectedGenre ?? 0];
+        if (noneIndex > 0) s.genres.splice(noneIndex, 1);
+        s.genres.unshift(NONE_GENRE);
+        s.selectedGenre = Math.max(0, s.genres.indexOf(selectedGenre));
+    }
     if (s.selectedGenre == null || s.selectedGenre >= s.genres.length) s.selectedGenre = 0;
     if (!s.writingMode) s.writingMode = "both";
     if (s.maxTokens == null) s.maxTokens = 500;
